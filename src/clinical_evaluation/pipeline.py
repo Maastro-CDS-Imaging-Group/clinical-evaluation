@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Union
 from functools import partial
 
-import preprocess
+from clinical_evaluation import preprocess
 
 _logger = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ class EvaluationPipeline:
 
         result = elastixImageFilter.Execute()
 
-        return result
+        return result, elastixImageFilter
 
 
     def save(self, image: sitk.Image, output_dir: Path, tag: str= 'deformed'):
@@ -58,3 +58,12 @@ class EvaluationPipeline:
             fn = getattr(preprocess, preprocess_fn)
             return fn(image)
             
+    def apply_body_mask(self, image: sitk.Image, HU_threshold: int = -300):
+        array = sitk.GetArrayFromImage(image)
+        array = preprocess.apply_body_mask_and_bound(array, masking_value=-1024, \
+                                apply_mask=True, apply_bound=False, HU_threshold=HU_threshold)
+
+        masked_image = sitk.GetImageFromArray(array)
+        masked_image.CopyInformation(image)
+
+        return masked_image

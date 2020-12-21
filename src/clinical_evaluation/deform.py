@@ -21,7 +21,7 @@ import logging
 from pathlib import Path
 
 from clinical_evaluation import __version__
-from pipeline import EvaluationPipeline
+from clinical_evaluation.pipeline import EvaluationPipeline
 
 __author__ = "Suraj Pai"
 __copyright__ = "Suraj Pai"
@@ -45,7 +45,7 @@ def deform(args):
     if args.preprocess_target:
         target = pipeline.preprocess(target, preprocess_fn=args.preprocess_target)
 
-    deformed_image = pipeline.deform(source, target, args.params)
+    deformed_image, _ = pipeline.deform(source, target, args.params)
     
     # Save all 3 images
     pipeline.save(deformed_image, args.output_dir)
