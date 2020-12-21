@@ -54,7 +54,7 @@ def parse_args(args):
       :obj:`argparse.Namespace`: command line parameters namespace
     """
     parser = argparse.ArgumentParser(
-        description="Just a Fibonacci demonstration")
+        description="Run clinical evaluation pipeline with different settings and parameters")
     parser.add_argument(
         "--version",
         action="version",
