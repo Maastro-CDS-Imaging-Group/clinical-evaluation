@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Union
 
 from clinical_evaluation import __version__
+from clinical_evaluation import metrics
 from clinical_evaluation.pipeline import EvaluationPipeline
 
 __author__ = "Suraj Pai"
@@ -50,6 +51,9 @@ def deform(args):
     deformed_image, _ = pipeline.deform(source, target, args.params, mode=args.mode)
     
     # Save all 3 images
+    if args.metrics:
+      metrics.calculate_metrics(target, deformed_image)
+
     pipeline.save(deformed_image, args.output_dir)
     pipeline.save(source, args.output_dir, tag='source')
     pipeline.save(target, args.output_dir, tag='target')
@@ -112,6 +116,7 @@ def parse_args(args):
       help="Mode to run the registration either Elastix or ITKv4",
       default='ITKv4',
       type=str)               
+             
     
 
     parser.add_argument(
@@ -124,14 +129,19 @@ def parse_args(args):
     
 
     parser.add_argument(
+        "--metrics",
+        dest="metrics",
+        help="Compute metrics if enabled!",
+        action="store_const",
+        const=True)
+
+    parser.add_argument(
         "-v",
         "--verbose",
         dest="loglevel",
         help="set loglevel to INFO",
         action="store_const",
         const=logging.INFO)
-
-
 
     parser.add_argument(
         "-vv",
