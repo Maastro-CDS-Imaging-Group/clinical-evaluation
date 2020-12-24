@@ -19,6 +19,7 @@ import argparse
 import sys
 import logging
 from pathlib import Path
+from typing import Union
 
 from clinical_evaluation import __version__
 from clinical_evaluation.pipeline import EvaluationPipeline
@@ -45,7 +46,8 @@ def deform(args):
     if args.preprocess_target:
         target = pipeline.preprocess(target, preprocess_fn=args.preprocess_target)
 
-    deformed_image, _ = pipeline.deform(source, target, args.params)
+
+    deformed_image, _ = pipeline.deform(source, target, args.params, mode=args.mode)
     
     # Save all 3 images
     pipeline.save(deformed_image, args.output_dir)
@@ -100,7 +102,16 @@ def parse_args(args):
       dest="params",
       help="Path to the parameters file to be used for the registration. See here: \
       https://simpleelastix.readthedocs.io/ParameterMaps.html",
-      type=Path)      
+      type=Union[Path, str])   
+
+
+    parser.add_argument(
+      "-m",
+      "--mode",
+      dest="mode",
+      help="Mode to run the registration either Elastix or ITKv4",
+      default='ITKv4',
+      type=str)               
     
 
     parser.add_argument(

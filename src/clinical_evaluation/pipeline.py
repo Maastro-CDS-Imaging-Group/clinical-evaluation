@@ -4,11 +4,19 @@ import traceback
 import logging
 from pathlib import Path
 from typing import Union
-from functools import partial
 
 from clinical_evaluation import preprocess
+from clinical_evaluation import registration_methods
 
 _logger = logging.getLogger(__name__)
+
+
+
+REGISTRATION_MAP = {
+    "ITKv4": registration_methods.registration_ITKv4,
+    "Elastix": registration_methods.registration_Elastix
+}
+
 
 class EvaluationPipeline:
     def load(self, path: Union[Path, str]):
@@ -23,27 +31,25 @@ class EvaluationPipeline:
         return image
 
 
-    def deform(self, source: sitk.Image, target: sitk.Image, params: Path):
+    def deform(self, source: sitk.Image, target: sitk.Image, params: Union[Path, str], mode: str = 'ITKv4'):
+        
+        registration = REGISTRATION_MAP[mode]
+
+        
+
         try:
-            elastixImageFilter = sitk.ElastixImageFilter()
-        except e:
-            _logger.error('This is caused most likely due to not having the SimpleElastix build of SimpleITK. \n \
-                            Check the releases page to obtain a bdist for the SimpleITK build for Ubuntu')
-            raise e
+            if params is not None:
+                result = registration(source, target, params)
+            else:
+                result = registration(source, target)
+        except ImportError as e:
+            _logger.warning('This is caused most likely due to not having the SimpleElastix build of SimpleITK. \n \
+                            Check the releases page to obtain a bdist for the SimpleITK build for Ubuntu \n \
+                        Falling back to SimpleITK affine registration')
 
-        if params is not None:
-            pmap = elastixImageFilter.ReadParameterFile(str(params))
+            result = REGISTRATION_MAP['ITKv4'](source, target)
 
-        # Set moving and fixed images
-        elastixImageFilter.SetFixedImage(target)
-        elastixImageFilter.SetMovingImage(source)
-
-        if params is not None:
-            elastixImageFilter.SetParameterMap(pmap)
-
-        result = elastixImageFilter.Execute()
-
-        return result, elastixImageFilter
+        return result
 
 
     def save(self, image: sitk.Image, output_dir: Path, tag: str= 'deformed'):
