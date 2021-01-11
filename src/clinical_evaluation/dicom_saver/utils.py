@@ -9,6 +9,7 @@ from clinical_evaluation.dicom_saver import DICOM_KEY_TAG, DICOM_TAG_KEY
 
 # ORG ROOT generated from https://www.medicalconnections.co.uk/
 ORG_ROOT = "1.2.826.0.1.3680043.10.650"
+RESCALE_PARAMETER_TAGS = ["RescaleSlope", "RescaleIntercept", "RescaleType"]
 
 def load_image(path: Union[Path, str]):
     try:
@@ -94,6 +95,10 @@ def copy_dicom_metadata(generated_metadata, existing_metadata):
         
         # Do not copy any of the UIDS
         if "UID" in DICOM_TAG_KEY[tag]:
+            continue
+        
+        # Intensity values are retained as is without any rescale parameters applied
+        if DICOM_TAG_KEY[tag] in RESCALE_PARAMETER_TAGS:
             continue
 
         metadata[tag] = value
