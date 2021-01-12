@@ -1,19 +1,23 @@
-from typing import Union
-from pathlib import Path
+import logging
 import time
-
-import SimpleITK as sitk
+from pathlib import Path
+from typing import Union
 
 import uuid
+import SimpleITK as sitk
 from clinical_evaluation.dicom_saver import DICOM_KEY_TAG, DICOM_TAG_KEY
+from pydicom.uid import generate_uid
 
+logger = logging.getLogger(__name__)
 # ORG ROOT generated from https://www.medicalconnections.co.uk/
-ORG_ROOT = "1.2.826.0.1.3680043.10.650"
-RESCALE_PARAMETER_TAGS = ["RescaleSlope", "RescaleIntercept", "RescaleType"]
+ORG_ROOT = '1.2.826.0.1.3680043.10.650.'
+IGNORE_TAGS = ["RescaleSlope", "RescaleIntercept"]
 
 def load_image(path: Union[Path, str]):
     try:
-        return sitk.ReadImage(str(path))
+        image = sitk.ReadImage(str(path))
+        image = sitk.Cast(image, sitk.sitkInt16)
+        return image
     except Exception as e:
         raise ValueError(f"SITK could not read your image with exception :{e}")
 
@@ -31,6 +35,7 @@ def get_metadata_from_dicom(fn):
     for key in reader.GetMetaDataKeys():
         metadata[key] = reader.GetMetaData(key)
 
+    logger.debug(f"Existing DICOM metadata: {metadata}")
     return metadata
 
 
@@ -49,6 +54,24 @@ def load_dicom_metadata(path: Union[Path, str]):
         return get_metadata_from_dicom(fn)
 
 
+def compute_tags_from_image(image):
+    """
+    Tags that need to be computed explicitly from the image are added here.
+    """
+    image_computed_tags = {}
+    # Image Orientation patient: Important for rendering of image
+    direction = "\\".join([str(d) for d in image.GetDirection()])
+    image_computed_tags[DICOM_KEY_TAG.ImageOrientationPatient] = direction
+    # Slice thickness is set to same as z spacing. TODO: Make this more general
+    image_computed_tags[DICOM_KEY_TAG.SliceThickness] = str(image.GetSpacing()[-1])
+
+    logger.debug(f"Computed from Image \n Slice Thickness: \
+         {image_computed_tags[DICOM_KEY_TAG.SliceThickness]} \
+            ImageOrientationPatient: {image_computed_tags[DICOM_KEY_TAG.ImageOrientationPatient]}")
+
+    return image_computed_tags
+
+
 def generate_dicom_uids():
     """
     UID generation: 
@@ -57,12 +80,19 @@ def generate_dicom_uids():
     #   UID = <org root>.<suffix>
     #   Org root generated from above is used with
     #   suffix added from UUID generation
+
+    generate_uid used from: 
+    https://pydicom.github.io/pydicom/dev/reference/generated/pydicom.uid.generate_uid.html
     """
     uid_dict = {}
-    uid_dict[DICOM_KEY_TAG.SeriesInstanceUID] = f"{ORG_ROOT}.{uuid.uuid1().int}"
-    uid_dict[DICOM_KEY_TAG.StudyInstanceUID] = f"{ORG_ROOT}.{uuid.uuid1().int}"
-    uid_dict[DICOM_KEY_TAG.StudyID] = f"{uuid.uuid1().int}"
-    uid_dict[DICOM_KEY_TAG.ID] = f"{uuid.uuid1().int}"
+    uid_dict[DICOM_KEY_TAG.SeriesInstanceUID] = generate_uid(prefix=ORG_ROOT)
+    uid_dict[DICOM_KEY_TAG.FrameOfReferenceUID] = generate_uid(prefix=ORG_ROOT)
+    uid_dict[DICOM_KEY_TAG.StudyInstanceUID] = generate_uid(prefix=ORG_ROOT)
+
+    # StudyID limit is 16 characters
+    uid_dict[DICOM_KEY_TAG.StudyID] = str(uuid.uuid4().int)[:16]
+    uid_dict[DICOM_KEY_TAG.SeriesNumber] = str(1)
+    uid_dict[DICOM_KEY_TAG.ID] = str(uuid.uuid4())
     return uid_dict
     
 
@@ -71,7 +101,7 @@ def generate_general_attributes():
     Generate general attributes: Description, Time and Date
     """
     general_attributes = {}
-    general_attributes[DICOM_KEY_TAG.SeriesDescription] = "Deep Learning generated sCT"
+    general_attributes[DICOM_KEY_TAG.SeriesDescription] = "Maastro CDS - Deep Learning Generated Image"
     general_attributes[DICOM_KEY_TAG.SeriesTime] = time.strftime("%H%M%S")
     general_attributes[DICOM_KEY_TAG.SeriesDate] = time.strftime("%Y%m%d")
     return general_attributes
@@ -97,8 +127,8 @@ def copy_dicom_metadata(generated_metadata, existing_metadata):
         if "UID" in DICOM_TAG_KEY[tag]:
             continue
         
-        # Intensity values are retained as is without any rescale parameters applied
-        if DICOM_TAG_KEY[tag] in RESCALE_PARAMETER_TAGS:
+        # Intensity values are retained as is without any rescale parameters applied.
+        if DICOM_TAG_KEY[tag] in IGNORE_TAGS:
             continue
 
         metadata[tag] = value
@@ -120,6 +150,8 @@ def generate_slice_metadata(image, slice_idx):
     ImagePositionPatient = '\\'.join([str(pos) for pos in image.TransformIndexToPhysicalPoint((0,0,slice_idx))])
     metadata[DICOM_KEY_TAG.ImagePositionPatient] = ImagePositionPatient
     metadata[DICOM_KEY_TAG.InstanceNumber] = str(slice_idx)
+
+    logger.debug(f"Image Position Patient: {ImagePositionPatient}")
     return metadata
 
 

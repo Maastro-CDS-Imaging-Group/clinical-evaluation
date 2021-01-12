@@ -27,6 +27,10 @@ class DicomSaver:
     def generate_dicom_series_metadata(self):
         """
         Generate series level metadata for the created DICOM
+        Refer for standard on how to do it:
+        http://gdcm.sourceforge.net/wiki/index.php/Writing_DICOM
+
+
         """
         dicom_series_metadata = {}
         # Parameters that will be generated irrespective of metadata
@@ -34,9 +38,10 @@ class DicomSaver:
         general_attribute_tags = utils.generate_general_attributes()
         dicom_series_metadata.update(general_attribute_tags)
 
-        # Image Orientation patient: Important for rendering of image
-        direction = "//".join([str(d) for d in self.image.GetDirection()])
-        dicom_series_metadata[DICOM_KEY_TAG.ImageOrientationPatient] = direction    
+        # Direction and slice thickness is computed 
+        # from the image
+        image_tags = utils.compute_tags_from_image(self.image)
+        dicom_series_metadata.update(image_tags)
 
         # Generate and add UIDs 
         uid_dicom_tags = utils.generate_dicom_uids()
@@ -61,12 +66,16 @@ class DicomSaver:
 
         for slice_idx in range(image_shape[-1]):
             image_slice = self.image[:, :, slice_idx]
+
             slice_metadata = utils.generate_slice_metadata(self.image, slice_idx)
             self.dicom_tags.update(slice_metadata)
+
             utils.set_metadata_from_dict(image_slice, self.dicom_tags)
 
             slice_save_path = (self.output_dir / str(slice_idx)).with_suffix(".dcm")
             writer.SetFileName(str(slice_save_path))
+            # Some readers fail to read compressed DICOMs
+            writer.UseCompressionOff()
             logger.info(f"Saving slice: {slice_idx}")
             writer.Execute(image_slice)
             
