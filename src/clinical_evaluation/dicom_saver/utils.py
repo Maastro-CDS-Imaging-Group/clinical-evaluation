@@ -7,11 +7,13 @@ import uuid
 import SimpleITK as sitk
 from clinical_evaluation.dicom_saver import DICOM_KEY_TAG, DICOM_TAG_KEY
 from pydicom.uid import generate_uid
+import pydicom
 
 logger = logging.getLogger(__name__)
 # ORG ROOT generated from https://www.medicalconnections.co.uk/
 ORG_ROOT = '1.2.826.0.1.3680043.10.650.'
 IGNORE_TAGS = ["RescaleSlope", "RescaleIntercept"]
+OVERRIDE_KEYS = [DICOM_KEY_TAG.StudyID, DICOM_KEY_TAG.ID, DICOM_KEY_TAG.SeriesNumber]
 
 def load_image(path: Union[Path, str]):
     try:
@@ -31,11 +33,16 @@ def get_metadata_from_dicom(fn):
     reader.SetFileName(str(fn))
     reader.LoadPrivateTagsOn()
     reader.ReadImageInformation()
+    logger.info(f"Reading {fn} for fetching existing metadata")
 
     for key in reader.GetMetaDataKeys():
         metadata[key] = reader.GetMetaData(key)
 
-    logger.debug(f"Existing DICOM metadata: {metadata}")
+    sequences = copy_sequences(fn)
+
+
+    readable_metadata = {DICOM_TAG_KEY[k]:v for k, v in metadata.items()}
+    logger.debug(f"Existing DICOM metadata: {readable_metadata}")
     return metadata
 
 
@@ -71,6 +78,11 @@ def compute_tags_from_image(image):
 
     return image_computed_tags
 
+def copy_sequences(fn):
+    """
+    Workaround with pydicom
+    """
+    pass
 
 def generate_dicom_uids():
     """
@@ -104,6 +116,7 @@ def generate_general_attributes():
     general_attributes[DICOM_KEY_TAG.SeriesDescription] = "Maastro CDS - Deep Learning Generated Image"
     general_attributes[DICOM_KEY_TAG.SeriesTime] = time.strftime("%H%M%S")
     general_attributes[DICOM_KEY_TAG.SeriesDate] = time.strftime("%Y%m%d")
+    
     return general_attributes
 
 
@@ -115,18 +128,18 @@ def copy_dicom_metadata(generated_metadata, existing_metadata):
     """
     metadata = {}
 
-    # Patient ID will be overwritten by the existing metadata
-    generated_metadata.pop(DICOM_KEY_TAG.ID)
+    # Certain attributes will be overwritten by the existing metadata
+    for key in OVERRIDE_KEYS:
+        generated_metadata.pop(key)
 
     for tag, value in existing_metadata.items():
         # Ignore tag if it has already been generated
         if tag in generated_metadata:
             continue
         
-        # Do not copy any of the UIDS
         if "UID" in DICOM_TAG_KEY[tag]:
             continue
-        
+                
         # Intensity values are retained as is without any rescale parameters applied.
         if DICOM_TAG_KEY[tag] in IGNORE_TAGS:
             continue

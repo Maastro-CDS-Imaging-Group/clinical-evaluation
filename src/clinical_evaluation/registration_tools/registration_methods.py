@@ -23,7 +23,7 @@ def registration_ITKv4(source: sitk.Image,
     return result, registration_transform
 
 
-def registration_Elastix(source: sitk.Image, target: sitk.Image, params: Path):
+def registration_Elastix(source: sitk.Image, target: sitk.Image, params: dict):
     _logger.info("Running Elastix Registration ...")
 
     elastixImageFilter = sitk.ElastixImageFilter()
@@ -32,12 +32,41 @@ def registration_Elastix(source: sitk.Image, target: sitk.Image, params: Path):
     elastixImageFilter.SetMovingImage(source)
 
     if params is not None:
-        pmap = elastixImageFilter.ReadParameterFile(str(params))
-        elastixImageFilter.SetParameterMap(pmap)
+        elastixImageFilter = set_filter_parameters(elastixImageFilter, params)
 
     result = elastixImageFilter.Execute()
 
     return result, elastixImageFilter
+    
+
+def set_filter_parameters(filter, params): 
+    """
+    If elastix relevant parameters are defined, 
+    analyze them and set the filter to consider the params.
+
+    """
+    if "parameter_files" in params:
+
+        parameter_files = params["parameter_files"]
+        
+        # Generate pmap based on list or file type provided
+        if isinstance(parameter_files, list):
+            pmap = sitk.VectorOfParameterMap()
+            for parameter_file in parameter_files:
+                pmap.append(filter.ReadParameterFile(parameter_file))
+                
+        else:
+            pmap = filter.ReadParameterFile(params["parameter_file"])
+            
+        filter.SetParameterMap(pmap)
+
+    if "target_mask" in params:
+        filter.SetFixedMask(params["target_mask"])     
+
+    if "source_mask" in params:
+        filter.SetMovingMask(params["source_mask"]) 
+
+    return filter
 
 
 def get_registration_transform(fixed_image,

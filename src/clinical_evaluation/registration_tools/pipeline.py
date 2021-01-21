@@ -33,7 +33,7 @@ class EvaluationPipeline:
     def deform(self,
                source: sitk.Image,
                target: sitk.Image,
-               params: Union[Path, str],
+               params: Union[dict, str],
                mode: str = 'ITKv4'):
 
         registration = REGISTRATION_MAP[mode]
