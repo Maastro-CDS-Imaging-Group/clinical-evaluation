@@ -28,6 +28,7 @@ def registration_Elastix(source: sitk.Image, target: sitk.Image, params: dict):
 
     elastixImageFilter = sitk.ElastixImageFilter()
     # Set moving and fixed images
+    elastixImageFilter.LogToConsoleOff()
     elastixImageFilter.SetFixedImage(target)
     elastixImageFilter.SetMovingImage(source)
 

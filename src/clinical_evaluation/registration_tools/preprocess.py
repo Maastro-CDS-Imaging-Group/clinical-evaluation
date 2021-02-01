@@ -183,6 +183,9 @@ def get_body_mask_and_bound(image: np.ndarray,
             )
             continue
 
+        if len(contours) == 0:
+            continue
+
         # Get the largest contour based on its area
         largest_contour = max(contours, key=cv2.contourArea)
 
