@@ -3,7 +3,7 @@ from pathlib import Path
 
 import SimpleITK as sitk
 from clinical_evaluation.registration_tools import (metrics, pipeline,
-                                                    preprocess)
+                                                    preprocess, regviz, utils)
 from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
@@ -16,26 +16,31 @@ def main(args):
     for folder in tqdm(list(valid_folder.iterdir())):
         CT_path = list((folder / "CT").rglob("CT.nrrd"))[0]
         CT = eval_pipeline.load(CT_path)
-        CT = eval_pipeline.apply_body_mask(CT)
+        CT, _ = eval_pipeline.apply_body_mask(CT)
             
         CBCT_path = (folder / "CBCT" / "X01").with_suffix(".nrrd")
         
         try:
             CBCT = eval_pipeline.load(CBCT_path)
+
         except:
             logger.error(f"Skipping: {folder.stem}")
-            continue
+            continue            
 
         CBCT = preprocess.hu_correction(CBCT)
+        CBCT, mask = eval_pipeline.apply_body_mask(CBCT, HU_threshold=-700)
 
         # Perform deformable registration
         params = {
-        "parameter_file": ["/home/suraj/Repositories/clinical-evaluation/elastix_params/Par0032_rigid.txt", \
+        "config": ["/home/suraj/Repositories/clinical-evaluation/elastix_params/Par0032_rigid.txt", \
                         "/home/suraj/Repositories/clinical-evaluation/elastix_params/Par0032_bsplines.txt"],
         }
 
         logger.info(f"Registering scans: {CBCT_path} and {CT_path}")
         dpCT, elastixImageFilter = eval_pipeline.deform(CT, CBCT, params, mode='Elastix')
+
+        # Propagate CBCT mask to dpCT for better alignment
+        dpCT = utils.apply_mask(dpCT, mask)
         
         # Save all the required image
         logger.info(f"Complete! Saving output")
@@ -45,6 +50,10 @@ def main(args):
         sitk.WriteImage(CBCT, str(out_dir / "source.nrrd"), True)
         sitk.WriteImage(CT, str(out_dir / "target.nrrd"), True)
         sitk.WriteImage(dpCT, str(out_dir / "deformed.nrrd"), True)
+
+        # Generate and save registration visualizations
+        visualizer = regviz.RegistrationVisualizer(outdir=out_dir, save_mode='image+video')
+        visualizer.save_registration_visualizations(CBCT, dpCT)
 
 
 if __name__ == "__main__":

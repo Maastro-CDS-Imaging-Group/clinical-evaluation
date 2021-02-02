@@ -7,6 +7,7 @@ from typing import Union
 
 from clinical_evaluation.registration_tools import preprocess
 from clinical_evaluation.registration_tools import registration_methods
+from clinical_evaluation.registration_tools import utils
 
 _logger = logging.getLogger(__name__)
 
@@ -66,10 +67,13 @@ class EvaluationPipeline:
 
     def apply_body_mask(self, image: sitk.Image, HU_threshold: int = -300):
         array = sitk.GetArrayFromImage(image)
-        array = preprocess.apply_body_mask_and_bound(array, masking_value=-1024, \
-                                apply_mask=True, apply_bound=False, HU_threshold=HU_threshold)
+        mask = preprocess.get_body_mask(array, \
+                                HU_threshold=HU_threshold)
 
-        masked_image = sitk.GetImageFromArray(array)
-        masked_image.CopyInformation(image)
+        mask = sitk.GetImageFromArray(mask)
+        mask.CopyInformation(image)
 
-        return masked_image
+        image = utils.apply_mask(image, mask)
+
+        return image, mask
+

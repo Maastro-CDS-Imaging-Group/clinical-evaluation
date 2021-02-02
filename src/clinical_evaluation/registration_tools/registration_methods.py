@@ -46,9 +46,9 @@ def set_filter_parameters(filter, params):
     analyze them and set the filter to consider the params.
 
     """
-    if "parameter_files" in params:
+    if "config" in params:
 
-        parameter_files = params["parameter_files"]
+        parameter_files = params["config"]
         
         # Generate pmap based on list or file type provided
         if isinstance(parameter_files, list):
@@ -57,7 +57,7 @@ def set_filter_parameters(filter, params):
                 pmap.append(filter.ReadParameterFile(parameter_file))
                 
         else:
-            pmap = filter.ReadParameterFile(params["parameter_file"])
+            pmap = filter.ReadParameterFile(params["config"])
             
         filter.SetParameterMap(pmap)
 
