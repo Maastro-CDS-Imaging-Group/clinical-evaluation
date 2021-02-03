@@ -1,25 +1,19 @@
 import logging
 import SimpleITK as sitk
 import os
-from pathlib import Path
 
 _logger = logging.getLogger(__name__)
 
-TRANSFORMATION_MAP = {
-    "Affine": sitk.AffineTransform(3),
-    "Rigid": sitk.Euler3DTransform()
-}
+TRANSFORMATION_MAP = {"Affine": sitk.AffineTransform(3), "Rigid": sitk.Euler3DTransform()}
 
 
-def registration_ITKv4(source: sitk.Image,
-                       target: sitk.Image,
-                       params: str = "Affine"):
+def registration_ITKv4(source: sitk.Image, target: sitk.Image, params: str = "Affine"):
     _logger.info("Running ITKv4 Registration ...")
     registration_transform = get_registration_transform(target, source, \
                                     registration_type=TRANSFORMATION_MAP[params])
 
-    result = sitk.Resample(source, target, registration_transform,
-                           sitk.sitkLinear, -1024, source.GetPixelID())
+    result = sitk.Resample(source, target, registration_transform, sitk.sitkLinear, -1024,
+                           source.GetPixelID())
     return result, registration_transform
 
 
@@ -38,9 +32,9 @@ def registration_Elastix(source: sitk.Image, target: sitk.Image, params: dict):
     result = elastixImageFilter.Execute()
 
     return result, elastixImageFilter
-    
 
-def set_filter_parameters(filter, params): 
+
+def set_filter_parameters(elastix_filter, params):
     """
     If elastix relevant parameters are defined, 
     analyze them and set the filter to consider the params.
@@ -49,25 +43,25 @@ def set_filter_parameters(filter, params):
     if "config" in params:
 
         parameter_files = params["config"]
-        
+
         # Generate pmap based on list or file type provided
         if isinstance(parameter_files, list):
             pmap = sitk.VectorOfParameterMap()
             for parameter_file in parameter_files:
-                pmap.append(filter.ReadParameterFile(parameter_file))
-                
+                pmap.append(elastix_filter.ReadParameterFile(parameter_file))
+
         else:
-            pmap = filter.ReadParameterFile(params["config"])
-            
-        filter.SetParameterMap(pmap)
+            pmap = elastix_filter.ReadParameterFile(params["config"])
+
+        elastix_filter.SetParameterMap(pmap)
 
     if "target_mask" in params:
-        filter.SetFixedMask(params["target_mask"])     
+        elastix_filter.SetFixedMask(params["target_mask"])
 
     if "source_mask" in params:
-        filter.SetMovingMask(params["source_mask"]) 
+        elastix_filter.SetMovingMask(params["source_mask"])
 
-    return filter
+    return elastix_filter
 
 
 def get_registration_transform(fixed_image,
@@ -91,8 +85,8 @@ def get_registration_transform(fixed_image,
     """
 
     # Get seed from environment variable if set for registration randomness
-    seed = int(os.environ.get('PYTHONHASHSEED')
-               ) if 'PYTHONHASHSEED' in os.environ else sitk.sitkWallClock
+    seed = int(
+        os.environ.get('PYTHONHASHSEED')) if 'PYTHONHASHSEED' in os.environ else sitk.sitkWallClock
 
     # SimpleITK registration's supported pixel types are sitkFloat32 and sitkFloat64
     fixed_image = sitk.Cast(fixed_image, sitk.sitkFloat32)
@@ -101,8 +95,7 @@ def get_registration_transform(fixed_image,
     registration_method = sitk.ImageRegistrationMethod()
 
     # Similarity metric settings
-    registration_method.SetMetricAsMattesMutualInformation(
-        numberOfHistogramBins=200)
+    registration_method.SetMetricAsMattesMutualInformation(numberOfHistogramBins=200)
     registration_method.SetMetricSamplingStrategy(registration_method.RANDOM)
 
     registration_method.SetMetricSamplingPercentage(0.01, seed)
@@ -110,11 +103,10 @@ def get_registration_transform(fixed_image,
     registration_method.SetInterpolator(sitk.sitkLinear)
 
     # Optimizer settings
-    registration_method.SetOptimizerAsGradientDescent(
-        learningRate=1.0,
-        numberOfIterations=200,
-        convergenceMinimumValue=1e-6,
-        convergenceWindowSize=10)
+    registration_method.SetOptimizerAsGradientDescent(learningRate=1.0,
+                                                      numberOfIterations=200,
+                                                      convergenceMinimumValue=1e-6,
+                                                      convergenceWindowSize=10)
     registration_method.SetOptimizerScalesFromPhysicalShift()
 
     # Setup for the multi-resolution framework

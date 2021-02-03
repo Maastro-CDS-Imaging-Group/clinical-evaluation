@@ -1,13 +1,10 @@
-import SimpleITK as sitk
-from pathlib import Path
-import traceback
 import logging
+import traceback
 from pathlib import Path
 from typing import Union
 
-from clinical_evaluation.registration_tools import preprocess
-from clinical_evaluation.registration_tools import registration_methods
-from clinical_evaluation.registration_tools import utils
+import SimpleITK as sitk
+from clinical_evaluation.registration_tools import (preprocess, registration_methods, utils)
 
 _logger = logging.getLogger(__name__)
 
@@ -18,16 +15,16 @@ REGISTRATION_MAP = {
 
 
 class EvaluationPipeline:
+
     def load(self, path: Union[Path, str]):
         _logger.info(f"Loading image from {path}")
         try:
             image = sitk.ReadImage(str(path))
 
-        except BaseException as e:
-            _logger.error(
-                f'Failed to load image using SimpleITK with error: \n {traceback.print_exc()}'
-            )
-            raise e
+        except:
+            _logger.debug(
+                f'Failed to load image using SimpleITK with error: \n {traceback.print_exc()}')
+            raise RuntimeError('Failed to load image using SimpleITK')
 
         return image
 
@@ -44,7 +41,7 @@ class EvaluationPipeline:
                 result = registration(source, target, params)
             else:
                 result = registration(source, target)
-        except ImportError as e:
+        except ImportError:
             _logger.warning(
                 'This is caused most likely due to not having the SimpleElastix build of SimpleITK. \n \
                             Check the releases page to obtain a bdist for the SimpleITK build for Ubuntu \n \
@@ -76,4 +73,3 @@ class EvaluationPipeline:
         image = utils.apply_mask(image, mask)
 
         return image, mask
-

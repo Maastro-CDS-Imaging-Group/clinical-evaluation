@@ -1,10 +1,8 @@
 from pathlib import Path
-from typing import Union
 
 import SimpleITK as sitk
 from clinical_evaluation.dicom_saver import DICOM_KEY_TAG, DICOM_TAG_KEY
 from clinical_evaluation.dicom_saver import utils
-import pydicom
 
 import logging
 logger = logging.getLogger(__name__)
@@ -54,7 +52,6 @@ class DicomSaver:
             dicom_series_metadata.update(cloned_metadata)
 
         return dicom_series_metadata
-
             
     def save_dicom_slices(self):
         writer = sitk.ImageFileWriter()

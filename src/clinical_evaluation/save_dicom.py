@@ -17,9 +17,19 @@ Note: This skeleton file can be safely removed if not needed!
 
 import argparse
 import sys
+import os
 import logging
+from pathlib import Path
+from typing import Union
+
+try:
+    import clinical_evaluation
+except:
+    print("Importing as local module")
+    sys.path.append(f"{os.getcwd()}/src")
 
 from clinical_evaluation import __version__
+from clinical_evaluation.dicom_saver import dicom_saver
 
 __author__ = "Suraj Pai"
 __copyright__ = "Suraj Pai"
@@ -28,20 +38,9 @@ __license__ = "mit"
 _logger = logging.getLogger(__name__)
 
 
-def fib(n):
-    """Fibonacci example function
-
-    Args:
-      n (int): integer
-
-    Returns:
-      int: n-th Fibonacci number
-    """
-    assert n > 0
-    a, b = 1, 1
-    for i in range(n - 1):
-        a, b = b, a + b
-    return a
+def save(args):
+    ds = dicom_saver.DicomSaver(output_dir=args.output_dir)
+    ds.save(args.image_path, args.dicom_path)
 
 
 def parse_args(args):
@@ -54,29 +53,41 @@ def parse_args(args):
       :obj:`argparse.Namespace`: command line parameters namespace
     """
     parser = argparse.ArgumentParser(
-        description=
-        "Run clinical evaluation pipeline with different settings and parameters"
-    )
+        description="Peform registration using SimpleElastix between two nrrd volumes")
+    parser.add_argument("--version",
+                        action="version",
+                        version="clinical-evaluation {ver}".format(ver=__version__))
+
+    parser.add_argument(dest="image_path",
+                        help="Path to image that can be read by SimpleITK",
+                        type=Path)
+
+    parser.add_argument("--dicom_path",
+                        dest="dicom_path",
+                        help="Path to dicom file to carry over metadata from",
+                        type=Path)
+
     parser.add_argument(
-        "--version",
-        action="version",
-        version="clinical-evaluation {ver}".format(ver=__version__))
-    parser.add_argument(dest="n",
-                        help="n-th Fibonacci number",
-                        type=int,
-                        metavar="INT")
+        "--output_dir",
+        dest="output_dir",
+        help="Path to save the created dicom, if directory does not exist it will be created",
+        default="dicom_saver_output",
+        type=Path)
+
     parser.add_argument("-v",
                         "--verbose",
                         dest="loglevel",
                         help="set loglevel to INFO",
                         action="store_const",
                         const=logging.INFO)
+
     parser.add_argument("-vv",
                         "--very-verbose",
                         dest="loglevel",
                         help="set loglevel to DEBUG",
                         action="store_const",
                         const=logging.DEBUG)
+
     return parser.parse_args(args)
 
 
@@ -102,7 +113,7 @@ def main(args):
     args = parse_args(args)
     setup_logging(args.loglevel)
     _logger.debug("Starting crazy calculations...")
-    print("The {}-th Fibonacci number is {}".format(args.n, fib(args.n)))
+    save(args)
     _logger.info("Script ends here")
 
 

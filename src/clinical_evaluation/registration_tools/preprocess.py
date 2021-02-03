@@ -47,8 +47,7 @@ def resample_image_to_spacing(image: sitk.Image,
     spacing = image.GetSpacing()
     size = image.GetSize()
     new_size = [
-        int(round(siz * spac / n_spac))
-        for siz, spac, n_spac in zip(size, spacing, new_spacing)
+        int(round(siz * spac / n_spac)) for siz, spac, n_spac in zip(size, spacing, new_spacing)
     ]
     return sitk.Resample(
         image,
@@ -62,43 +61,24 @@ def resample_image_to_spacing(image: sitk.Image,
         image.GetPixelID())  # outputPixelType
 
 
-def get_connected_components(
-        binary_array: np.ndarray,
-        structuring_element: np.ndarray = None) -> np.ndarray:
+def get_connected_components(binary_array: np.ndarray,
+                             structuring_element: np.ndarray = None) -> np.ndarray:
     """
     Returns a label map with a unique integer label for each connected geometrical object in the given binary array.
     Integer labels of components start from 1. Background is 0.
     """
-
-    if not structuring_element:  # If not given, set 26-connected structure as default
-        if binary_array.ndim == 3:
-            cc_structure = np.array([[[1, 1, 1], [1, 1, 1], [1, 1, 1]],
-                                     [[1, 1, 1], [1, 1, 1], [1, 1, 1]],
-                                     [[1, 1, 1], [1, 1, 1], [1, 1, 1]]])
-        elif binary_array.ndim == 2:
-            cc_structure = np.array([[1, 1, 1], [1, 1, 1], [1, 1, 1]])
-        else:
-            raise NotImplementedError()
-        # or alternatively, use the following function -
-        # cc_structure = ndimage.generate_binary_structure(rank=3, connectivity=3)
-
-    connected_component_array, num_connected_components = ndimage.label(binary_array, \
+    connected_component_array, _ = ndimage.label(binary_array, \
                                                                         structure=structuring_element)
-
     return connected_component_array
 
 
-def smooth_contour_points(contour: np.ndarray,
-                          radius: int = 3,
-                          sigma: int = 10) -> np.ndarray:
+def smooth_contour_points(contour: np.ndarray, radius: int = 3, sigma: int = 10) -> np.ndarray:
     """
     Function that smooths contour points using the approach from 
     https://stackoverflow.com/a/37536310
     
     Simple explanation: Convolve 1D gaussian filter over the points to smoothen the curve
     """
-    neighbourhood = 2 * radius + 1
-
     # Contour length is the total number of points + extra points
     # to ensure circularity.
     contour_length = len(contour) + 2 * radius
@@ -128,8 +108,7 @@ def smooth_contour_points(contour: np.ndarray,
     return np.array(smooth_contours)
 
 
-def get_body_mask(image: np.ndarray,
-                            HU_threshold: int) -> np.ndarray:
+def get_body_mask(image: np.ndarray, HU_threshold: int) -> np.ndarray:
     """
     Function that gets a mask around the patient body and returns a 3D bound
 
@@ -154,17 +133,13 @@ def get_body_mask(image: np.ndarray,
 
     # Get counts for each component in the connected component analysis
     label_counts = [
-        np.sum(connected_components == label)
-        for label in range(1,
-                           connected_components.max() + 1)
+        np.sum(connected_components == label) for label in range(1,
+                                                                 connected_components.max() + 1)
     ]
     max_label = np.argmax(label_counts) + 1
 
     # Image with largest component binary mask
     binarized_image = connected_components == max_label
-
-    # Get coordinates where a label (1) is present
-    label_coordinates = np.nonzero(binarized_image)
 
     for z in range(binarized_image.shape[0]):
 
@@ -172,12 +147,10 @@ def get_body_mask(image: np.ndarray,
 
         # Find contours for each binary slice
         try:
-            contours, hierarchy = cv2.findContours(binary_slice, cv2.RETR_TREE,
-                                                   cv2.CHAIN_APPROX_SIMPLE)
-        except:
-            logger.error(
-                "OpenCV could not find contours: Most likely this is a completely black image"
-            )
+            contours, _ = cv2.findContours(binary_slice, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        except BaseException:
+            logger.debug(
+                "OpenCV could not find contours: Most likely this is a completely black image")
             continue
 
         if len(contours) == 0:

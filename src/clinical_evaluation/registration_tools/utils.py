@@ -1,5 +1,3 @@
-from pathlib import Path
-import imageio
 import numpy as np
 import SimpleITK as sitk
 import logging
@@ -22,12 +20,10 @@ def make_isotropic(image, interpolator=sitk.sitkLinear):
     min_spacing = min(original_spacing)
     new_spacing = [min_spacing] * image.GetDimension()
     new_size = [
-        int(round(osz * ospc / min_spacing))
-        for osz, ospc in zip(original_size, original_spacing)
+        int(round(osz * ospc / min_spacing)) for osz, ospc in zip(original_size, original_spacing)
     ]
-    return sitk.Resample(image, new_size, sitk.Transform(), interpolator,
-                         image.GetOrigin(), new_spacing, image.GetDirection(),
-                         0, image.GetPixelID())
+    return sitk.Resample(image, new_size, sitk.Transform(), interpolator, image.GetOrigin(),
+                         new_spacing, image.GetDirection(), 0, image.GetPixelID())
 
 
 def get_image_preview(sitk_image, orientation='horizontal'):
@@ -76,14 +72,14 @@ def get_video_preview(sitk_image, orientation='horizontal'):
 
             preview_image = padded_stack((axial, sagittal, coronal), \
                 orientation=orientation)
-            
+
             frames.append(preview_image)
 
     else:
         logger.error("Image preview not implemented for 2D and 4D images")
         return  # TODO: implement for 2D and 4D
 
-    return frames   
+    return frames
 
 
 def padded_stack(arrays, orientation='vertical'):
@@ -119,12 +115,10 @@ def pad_to(arr, target, index):
 
 def all_identical(sequence):
     """Check if all values of a list or tuple are identical."""
-    return sequence.count(sequence[0]) == len(
-        sequence)  # https://stackoverflow.com/a/3844948
+    return sequence.count(sequence[0]) == len(sequence)  # https://stackoverflow.com/a/3844948
 
 
-def apply_mask(image:sitk.Image, mask: sitk.Image):
-    filter = sitk.MaskImageFilter()
-    filter.SetOutsideValue(-1024)
-    return filter.Execute(image, mask)
-     
+def apply_mask(image: sitk.Image, mask: sitk.Image):
+    mask_filter = sitk.MaskImageFilter()
+    mask_filter.SetOutsideValue(-1024)
+    return mask_filter.Execute(image, mask)

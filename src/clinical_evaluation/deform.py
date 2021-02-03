@@ -42,17 +42,12 @@ def deform(args):
     target = pipeline.load(args.target)
 
     if args.preprocess_source:
-        source = pipeline.preprocess(source,
-                                     preprocess_fn=args.preprocess_source)
+        source = pipeline.preprocess(source, preprocess_fn=args.preprocess_source)
 
     if args.preprocess_target:
-        target = pipeline.preprocess(target,
-                                     preprocess_fn=args.preprocess_target)
+        target = pipeline.preprocess(target, preprocess_fn=args.preprocess_target)
 
-    deformed_image, _ = pipeline.deform(source,
-                                        target,
-                                        args.params,
-                                        mode=args.mode)
+    deformed_image, _ = pipeline.deform(source, target, args.params, mode=args.mode)
 
     # Save all 3 images
     if args.metrics:
@@ -73,62 +68,52 @@ def parse_args(args):
       :obj:`argparse.Namespace`: command line parameters namespace
     """
     parser = argparse.ArgumentParser(
-        description=
-        "Peform registration using SimpleElastix between two nrrd volumes")
-    parser.add_argument(
-        "--version",
-        action="version",
-        version="clinical-evaluation {ver}".format(ver=__version__))
+        description="Peform registration using SimpleElastix between two nrrd volumes")
+    parser.add_argument("--version",
+                        action="version",
+                        version="clinical-evaluation {ver}".format(ver=__version__))
 
-    parser.add_argument(dest="source",
-                        help="Source volume, the volume to be deformed",
-                        type=Path)
+    parser.add_argument(dest="source", help="Source volume, the volume to be deformed", type=Path)
 
-    parser.add_argument(
-        "--preprocess_source",
-        dest="preprocess_source",
-        help=
-        "Enable preprocessing with a certain schema. This schema can be defined in preprocess.py and the name of the function \
-              can be provided here to run the op. This argument processes source image",
-        type=str)
+    parser.add_argument("--preprocess_source",
+                        dest="preprocess_source",
+                        help="Enable preprocessing with a certain schema. "
+                        "This schema can be defined in preprocess.py and the name of the function "
+                        "can be provided here to run the op. This argument processes source image",
+                        type=str)
 
     parser.add_argument(
         dest="target",
-        help=
-        "Target volume, the volume that is used as reference for the deformation",
+        help="Target volume, the volume that is used as reference for the deformation",
         type=Path)
 
-    parser.add_argument(
-        "--preprocess_target",
-        dest="preprocess_target",
-        help=
-        "Enable preprocessing with a certain schema. This schema can be defined in preprocess.py and the name of the function \
-              can be provided here to run the op. This argument processes target image",
-        type=str)
+    parser.add_argument("--preprocess_target",
+                        dest="preprocess_target",
+                        help="Enable preprocessing with a certain schema. "
+                        "This schema can be defined in preprocess.py and the name of the function "
+                        "can be provided here to run the op. This argument processes source image",
+                        type=str)
 
     parser.add_argument(
         "-p",
         "--params",
         dest="params",
-        help=
-        "Path to the parameters file to be used for the registration. See here: \
+        help="Path to the parameters file to be used for the registration. See here: \
       https://simpleelastix.readthedocs.io/ParameterMaps.html",
         type=Union[Path, str])
 
-    parser.add_argument(
-        "-m",
-        "--mode",
-        dest="mode",
-        help="Mode to run the registration either Elastix or ITKv4",
-        default='ITKv4',
-        type=str)
+    parser.add_argument("-m",
+                        "--mode",
+                        dest="mode",
+                        help="Mode to run the registration either Elastix or ITKv4",
+                        default='ITKv4',
+                        type=str)
 
     parser.add_argument(
         "-o",
         "--output_dir",
         dest="output_dir",
-        help=
-        "Path to output the result image, if it is a not existing, it will be created",
+        help="Path to output the result image, if it is a not existing, it will be created",
         default='.',
         type=Path)
 
