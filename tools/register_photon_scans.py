@@ -64,16 +64,16 @@ def main(args):
         # Get body mask for the CBCT
         CBCT_mask = eval_pipeline.get_body_mask(CBCT, HU_threshold=-700)
 
+        # Apply body masks to CBCT and CT
+        CBCT = utils.apply_mask(CBCT, CBCT_mask)
+        CT = utils.apply_mask(CT, CT_mask)
+
         # Perform deformable registration using SimpleElastix parameters:
         # https://elastix.lumc.nl/modelzoo/par0032/
 
-        # In addition to scans, masks for patient body in both CT 
-        # and CBCT scans is provided. 
         params = {
         "config": ["/home/suraj/Repositories/clinical-evaluation/elastix_params/Par0032_rigid.txt", \
-                    "/home/suraj/Repositories/clinical-evaluation/elastix_params/Par0032_bsplines.txt"],
-        "target_mask": CBCT_mask,
-        "source_mask": CT_mask
+                    "/home/suraj/Repositories/clinical-evaluation/elastix_params/Par0032_bsplines.txt"]
         }
 
         logger.info(f"Registering scans: {CBCT_path} and {CT_path}")
@@ -84,14 +84,14 @@ def main(args):
         # Propagate CBCT mask to dpCT for better correspondence
         dpCT = utils.apply_mask(dpCT, CBCT_mask)
 
-        # Apply body masks to CBCT and CT as well. 
-        CBCT = utils.apply_mask(CBCT, CBCT_mask)
-        CT = utils.apply_mask(CT, CT_mask)
-
-        # Deform masks/ propagate contours based on the deformation fields.
-        rt_masks = {k: sitk.Cast(sitk.Transformix(mask, elastixfilter.GetTransformParameterMap()), sitk.sitkInt8)  \
-                                                                        for k, mask in rt_masks.items()}
-        rt_masks["BODY"] = mask
+        if args.propagate_contours:
+            logger.info("Propagating contours ...")
+            # Deform masks/ propagate contours based on the deformation fields.
+            rt_masks["BODY"] = CT_mask
+            rt_masks = {k: sitk.Cast(sitk.Transformix(mask, elastixfilter.GetTransformParameterMap()), sitk.sitkInt8)  \
+                                                                            for k, mask in rt_masks.items()}
+        else:
+            rt_masks = {}
 
         # Save all the required scans
         logger.info("Complete! Saving output")
@@ -137,14 +137,19 @@ if __name__ == "__main__":
                         default="registered_scans",
                         type=Path)
 
-    parser.add_argument("--visualize",
+    parser.add_argument("-z", "--visualize",
                         help="If registration process should be visualized",
-                        default=True,
-                        type=bool)
-    parser.add_argument("--analyze",
+                        action='store_true', default=False)
+
+                        
+    parser.add_argument("-a", "--analyze",
                         help="If registration process should be analyzed",
-                        default=True,
-                        type=bool)
+                        action='store_true', default=False)
+
+
+    parser.add_argument("--propagate_contours",
+                        help="If contours should also be propagated from planning CT",
+                        action='store_false', default=False)
 
     parser.add_argument("-v",
                         "--verbose",

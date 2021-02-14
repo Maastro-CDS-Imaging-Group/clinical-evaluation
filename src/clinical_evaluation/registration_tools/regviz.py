@@ -29,7 +29,9 @@ class RegistrationVisualizer:
 
         visualizations = {
             "checkerboard": self.get_checkerboard_image(image1, image2),
-            "duochrome": self.get_overlay_differences(image1, image2)
+            "duochrome": self.get_overlay_differences(image1, image2),
+            "image1": image1,
+            "image2": image2,
         }
 
         for key, visual in visualizations.items():
