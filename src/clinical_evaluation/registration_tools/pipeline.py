@@ -62,7 +62,7 @@ class EvaluationPipeline:
             fn = getattr(preprocess, preprocess_fn)
             return fn(image)
 
-    def apply_body_mask(self, image: sitk.Image, HU_threshold: int = -300):
+    def get_body_mask(self, image: sitk.Image, HU_threshold: int = -300):
         array = sitk.GetArrayFromImage(image)
         mask = preprocess.get_body_mask(array, \
                                 HU_threshold=HU_threshold)
@@ -70,6 +70,4 @@ class EvaluationPipeline:
         mask = sitk.GetImageFromArray(mask)
         mask.CopyInformation(image)
 
-        image = utils.apply_mask(image, mask)
-
-        return image, mask
+        return mask

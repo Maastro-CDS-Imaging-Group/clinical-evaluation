@@ -14,6 +14,7 @@ from clinical_evaluation.registration_tools import (metrics, pipeline, preproces
 from clinical_evaluation.registration_tools import RegistrationInformation
 
 from tqdm import tqdm
+from clinical_evaluation.utils.logging import setup_logging
 
 logger = logging.getLogger(__name__)
 
@@ -26,12 +27,28 @@ def main(args):
     eval_pipeline = pipeline.EvaluationPipeline()
 
     for folder in tqdm(list(valid_folder.iterdir())):
-        # Get first match with filename CT.nrrd
-        CT_path = list((folder / "CT").rglob("CT.nrrd"))[0]
+        
+        # Loading CTs by going through all the folders and selecting one 
+        #  where both masks and CTs are present
+        for CT_path in (folder / "CT").rglob("CT.nrrd"):
+            parent_folder = CT_path.parent
+            if len(list(parent_folder.glob("*.nrrd"))) > 1:
+                break
+                
+        # Load CT, clip values and generate CT body mask
         CT = eval_pipeline.load(CT_path)
-        CT, _ = eval_pipeline.apply_body_mask(CT)
+        CT = preprocess.clip_values(CT)
+        CT_mask = eval_pipeline.get_body_mask(CT)
 
-        # Get CBCT path and try to load the CBCT if it exists
+        # Loading RT masks that are present with planning CT
+        mask_paths = {path.stem: path for path in CT_path.parent.glob("*.nrrd") \
+                                                    if path.stem != "CT"}
+        rt_masks = {}
+        for label, path in mask_paths.items():
+            rt_masks[label] = eval_pipeline.load(path)
+            rt_masks[label].CopyInformation(CT)
+
+        # Loading CBCTs, select the first CBCT scan
         CBCT_path = (folder / "CBCT" / "X01").with_suffix(".nrrd")
         try:
             CBCT = eval_pipeline.load(CBCT_path)
@@ -39,41 +56,67 @@ def main(args):
             logger.error(f"Skipping: {folder.stem}")
             continue
 
-        # Correct the CBCT value if not calibrated
+        # Correct the CBCT value as its not calibrated,
+        # clip the values and generate CBCT mask
         CBCT = preprocess.hu_correction(CBCT, cval=-1024)
-        CBCT, mask = eval_pipeline.apply_body_mask(CBCT, HU_threshold=-700)
+        CBCT = preprocess.clip_values(CBCT)
+
+        # Get body mask for the CBCT
+        CBCT_mask = eval_pipeline.get_body_mask(CBCT, HU_threshold=-700)
 
         # Perform deformable registration using SimpleElastix parameters:
         # https://elastix.lumc.nl/modelzoo/par0032/
+
+        # In addition to scans, masks for patient body in both CT 
+        # and CBCT scans is provided. 
         params = {
         "config": ["/home/suraj/Repositories/clinical-evaluation/elastix_params/Par0032_rigid.txt", \
-                        "/home/suraj/Repositories/clinical-evaluation/elastix_params/Par0032_bsplines.txt"],
+                    "/home/suraj/Repositories/clinical-evaluation/elastix_params/Par0032_bsplines.txt"],
+        "target_mask": CBCT_mask,
+        "source_mask": CT_mask
         }
 
         logger.info(f"Registering scans: {CBCT_path} and {CT_path}")
+        
+        # Deform the CT to CBCT and obtained the deformed planning CT or dpCT
+        dpCT, elastixfilter = eval_pipeline.deform(CT, CBCT, params, mode='Elastix')
 
-        # Deform the CT to CBCT
-        dpCT, _ = eval_pipeline.deform(CT, CBCT, params, mode='Elastix')
+        # Propagate CBCT mask to dpCT for better correspondence
+        dpCT = utils.apply_mask(dpCT, CBCT_mask)
 
-        # Propagate CBCT mask to dpCT for better alignment
-        dpCT = utils.apply_mask(dpCT, mask)
+        # Apply body masks to CBCT and CT as well. 
+        CBCT = utils.apply_mask(CBCT, CBCT_mask)
+        CT = utils.apply_mask(CT, CT_mask)
 
-        # Save all the required image
+        # Deform masks/ propagate contours based on the deformation fields.
+        rt_masks = {k: sitk.Cast(sitk.Transformix(mask, elastixfilter.GetTransformParameterMap()), sitk.sitkInt8)  \
+                                                                        for k, mask in rt_masks.items()}
+        rt_masks["BODY"] = mask
+
+        # Save all the required scans
         logger.info("Complete! Saving output")
         out_dir = out_folder / folder.stem
         out_dir.mkdir(parents=True, exist_ok=True)
 
         # Save CBCT, CT and deformed CT
-        sitk.WriteImage(CBCT, str(out_dir / "source.nrrd"), True)
-        sitk.WriteImage(CT, str(out_dir / "target.nrrd"), True)
-        sitk.WriteImage(dpCT, str(out_dir / "deformed.nrrd"), True)
+        sitk.WriteImage(CBCT, str(out_dir / f"target.nrrd"), True)
+        sitk.WriteImage(CT, str(out_dir / f"source.nrrd"), True)
+        sitk.WriteImage(dpCT, str(out_dir / f"deformed.nrrd"), True)
+        
+        # Save all the propagated contours
+        for label, mask in rt_masks.items():
+            sitk.WriteImage(mask, str(out_dir/ f"{label}.nrrd"), True)
 
         if args.analyze:
             # Calculate metrics between CBCT (target) and dpCT (deformed)
-            metric_dict = metrics.calculate_metrics(CBCT, dpCT)
+            metric_dict = metrics.calculate_metrics(CBCT, dpCT, offset=-1000)
+
+            for label, mask in rt_masks.items():
+                mask_metrics = metrics.calculate_metrics(CBCT, dpCT, mask=mask, offset=-1000)
+                metric_dict.update({f"{k}_{label}": v for k,v in mask_metrics.items()})
+
             metric_dict["save_dir"] = str(out_dir)
             metric_dict["Patient"] = folder.stem
-            
             reginfo_data.add_info(metric_dict)
 
         if args.visualize:
@@ -118,5 +161,5 @@ if __name__ == "__main__":
                         const=logging.DEBUG)
 
     args = parser.parse_args()
-
+    setup_logging(args.loglevel)
     main(args)

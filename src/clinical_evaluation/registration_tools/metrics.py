@@ -5,42 +5,50 @@ from typing import Optional
 from skimage.metrics import peak_signal_noise_ratio, structural_similarity
 
 METRIC_DICT = {
-    "SSIM": lambda x, y: ssim(*sitk2npy(x, y)),
-    "MSE": lambda x, y: mse(*sitk2npy(x, y)),
-    "NMSE": lambda x, y: nmse(*sitk2npy(x, y)),
-    "PSNR": lambda x, y: psnr(*sitk2npy(x, y)),
-    "MAE": lambda x, y: mae(*sitk2npy(x, y))
+    "ssim": lambda x, y, mask: ssim(*sitk2npy(x, y, mask)),
+    "mse": lambda x, y, mask: mse(*sitk2npy(x, y, mask)),
+    "nmse": lambda x, y, mask: nmse(*sitk2npy(x, y, mask)),
+    "psnr": lambda x, y, mask: psnr(*sitk2npy(x, y, mask)),
+    "mae": lambda x, y, mask: mae(*sitk2npy(x, y, mask))
 }
 
 
-def calculate_metrics(target, deformed_image):
+def calculate_metrics(target, deformed_image, mask=None, offset=None):
+    if offset is not None:
+        target, deformed_image = target + offset, deformed_image + offset
+
     metrics = {}
     for label, metric_function in METRIC_DICT.items():
-        metrics[label] = metric_function(target, deformed_image)
+        metrics[label] = metric_function(deformed_image, target, mask)
 
     return metrics
 
 
-def sitk2npy(gt: sitk.Image, pred: sitk.Image):
+def sitk2npy(gt: sitk.Image, pred: sitk.Image, mask=None):
     gt = sitk.GetArrayFromImage(gt)
     pred = sitk.GetArrayFromImage(pred)
+
+    if mask is not None:
+        mask = sitk.GetArrayFromImage(mask).astype(np.bool)
+        negated_mask = ~mask
+        gt = np.ma.masked_array(gt*mask, mask=negated_mask)
+        pred = np.ma.masked_array(pred*mask, mask=negated_mask)
+
     return gt, pred
 
 
 # Metrics below are taken from
 # https://github.com/facebookresearch/fastMRI/blob/master/fastmri/evaluate.py
 # Copyright (c) Facebook, Inc. and its affiliates.
-
-
-def mse(gt: np.ndarray, pred: np.ndarray) -> np.ndarray:
-    """Compute Mean Squared Error (MSE)"""
-    return np.mean((gt - pred)**2)
-
+# Added MAE to the list of metrics
 
 def mae(gt: np.ndarray, pred: np.ndarray) -> np.ndarray:
     """Compute Mean Absolute Error (MAE)"""
     return np.mean(np.abs(gt - pred))
 
+def mse(gt: np.ndarray, pred: np.ndarray) -> np.ndarray:
+    """Compute Mean Squared Error (MSE)"""
+    return np.mean((gt - pred)**2)
 
 def nmse(gt: np.ndarray, pred: np.ndarray) -> np.ndarray:
     """Compute Normalized Mean Squared Error (NMSE)"""
@@ -56,36 +64,8 @@ def ssim(gt: np.ndarray, pred: np.ndarray, maxval: Optional[float] = None) -> np
     """Compute Structural Similarity Index Metric (SSIM)"""
     maxval = gt.max() if maxval is None else maxval
 
-    ssim_val = 0
+    ssim = 0
     for slice_num in range(gt.shape[0]):
-        ssim_val = ssim_val + structural_similarity(
-            gt[slice_num], pred[slice_num], data_range=maxval)
+        ssim = ssim + structural_similarity(gt[slice_num], pred[slice_num], data_range=maxval)
 
-    return ssim_val / gt.shape[0]
-
-
-def get_abs_diff(source: sitk.Image, target: sitk.Image, mask: sitk.Image = None):
-
-    if mask:
-        MaskImageFilter = sitk.MaskImageFilter()
-        source = MaskImageFilter.Execute(source, mask)
-        target = MaskImageFilter.Execute(target, mask)
-
-    SubtractImageFilter = sitk.SubtractImageFilter()
-    difference_image = SubtractImageFilter.Execute(source, target)
-
-    AbsImageFilter = sitk.AbsImageFilter()
-    abs_difference_image = AbsImageFilter.Execute(difference_image)
-    return abs_difference_image
-
-
-def get_statistics(image: sitk.Image):
-    StatisticsImageFilter = sitk.StatisticsImageFilter()
-    StatisticsImageFilter.Execute(image)
-    mean = StatisticsImageFilter.GetMean()
-    variance = StatisticsImageFilter.GetVariance()
-    max_val = StatisticsImageFilter.GetMaximum()
-    min_val = StatisticsImageFilter.GetMinimum()
-
-    print(f"----- REPORT --------\n Mean: {mean} \n \
-            Max: {max_val} \n Min: {min_val} \n Variance: {variance}")
+    return ssim / gt.shape[0]

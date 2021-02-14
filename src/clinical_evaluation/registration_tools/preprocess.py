@@ -28,6 +28,12 @@ def hu_correction(image: sitk.Image, cval=-1024):
     image = image + cval
     return image
 
+def clip_values(image: sitk.Image, min=-1000, max=2000):
+    filter = sitk.ClampImageFilter()
+    filter.SetLowerBound(min)
+    filter.SetUpperBound(max)
+    return filter.Execute(image)
+
 
 def resample_image_to_spacing(image: sitk.Image,
                               new_spacing: list,

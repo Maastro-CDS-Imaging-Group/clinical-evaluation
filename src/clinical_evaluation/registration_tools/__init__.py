@@ -9,6 +9,7 @@ class RegistrationInformation:
 
     def add_info(self, info_dict):
         self.df = self.df.append(info_dict, ignore_index=True)
+        self.save_info()
 
     def save_info(self):
         if not self.df.empty:
