@@ -12,8 +12,9 @@ import sys
 from pathlib import Path
 
 import SimpleITK as sitk
-from clinical_evaluation.registration_tools import (RegistrationInformation, metrics, pipeline,
-                                                    preprocess, regviz, utils)
+from clinical_evaluation.registration_tools import (pipeline, regviz)
+from clinical_evaluation.utils import (metrics, preprocess, ops)
+from clinical_evaluation.registration_tools import RegistrationInformation
 from clinical_evaluation.utils.logging import setup_logging
 from tqdm import tqdm
 
@@ -67,8 +68,8 @@ def main(args):
             CBCT_mask = eval_pipeline.get_body_mask(CBCT, HU_threshold=-700)
 
             # Apply body masks to CBCT and CT
-            CBCT = utils.apply_mask(CBCT, CBCT_mask)
-            CT = utils.apply_mask(CT, CT_mask)
+            CBCT = ops.apply_mask(CBCT, CBCT_mask)
+            CT = ops.apply_mask(CT, CT_mask)
 
             # Perform deformable registration using SimpleElastix parameters:
             # https://elastix.lumc.nl/modelzoo/par0032/
@@ -84,7 +85,7 @@ def main(args):
             dpCT, elastixfilter = eval_pipeline.deform(CT, CBCT, params, mode='Elastix')
 
             # Propagate CBCT mask to dpCT for better correspondence
-            dpCT = utils.apply_mask(dpCT, CBCT_mask)
+            dpCT = ops.apply_mask(dpCT, CBCT_mask)
 
 
             # Save all the required image

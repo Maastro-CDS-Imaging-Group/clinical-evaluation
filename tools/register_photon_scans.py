@@ -10,7 +10,8 @@ import logging
 from pathlib import Path
 
 import SimpleITK as sitk
-from clinical_evaluation.registration_tools import (metrics, pipeline, preprocess, regviz, utils)
+from clinical_evaluation.registration_tools import (pipeline, regviz)
+from clinical_evaluation.utils import (metrics, preprocess, ops)
 from clinical_evaluation.registration_tools import RegistrationInformation
 
 from tqdm import tqdm
@@ -65,8 +66,8 @@ def main(args):
         CBCT_mask = eval_pipeline.get_body_mask(CBCT, HU_threshold=-700)
 
         # Apply body masks to CBCT and CT
-        CBCT = utils.apply_mask(CBCT, CBCT_mask)
-        CT = utils.apply_mask(CT, CT_mask)
+        CBCT = ops.apply_mask(CBCT, CBCT_mask)
+        CT = ops.apply_mask(CT, CT_mask)
 
         # Perform deformable registration using SimpleElastix parameters:
         # https://elastix.lumc.nl/modelzoo/par0032/
@@ -82,7 +83,7 @@ def main(args):
         dpCT, elastixfilter = eval_pipeline.deform(CT, CBCT, params, mode='Elastix')
 
         # Propagate CBCT mask to dpCT for better correspondence
-        dpCT = utils.apply_mask(dpCT, CBCT_mask)
+        dpCT = ops.apply_mask(dpCT, CBCT_mask)
 
         if args.propagate_contours:
             logger.info("Propagating contours ...")
@@ -140,8 +141,6 @@ if __name__ == "__main__":
     parser.add_argument("-z", "--visualize",
                         help="If registration process should be visualized",
                         action='store_true', default=False)
-
-                        
     parser.add_argument("-a", "--analyze",
                         help="If registration process should be analyzed",
                         action='store_true', default=False)
@@ -149,7 +148,7 @@ if __name__ == "__main__":
 
     parser.add_argument("--propagate_contours",
                         help="If contours should also be propagated from planning CT",
-                        action='store_false', default=False)
+                        action='store_true', default=False)
 
     parser.add_argument("-v",
                         "--verbose",

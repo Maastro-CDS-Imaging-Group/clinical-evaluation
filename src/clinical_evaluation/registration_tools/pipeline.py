@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Union
 
 import SimpleITK as sitk
-from clinical_evaluation.registration_tools import (preprocess, registration_methods, utils)
+from clinical_evaluation.utils import (preprocess, registration_methods, ops)
 
 _logger = logging.getLogger(__name__)
 
