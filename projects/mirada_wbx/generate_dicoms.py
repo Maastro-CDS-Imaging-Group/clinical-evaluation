@@ -16,9 +16,10 @@ Note: This skeleton file can be safely removed if not needed!
 """
 
 import argparse
-import sys
-import os
+import json
 import logging
+import os
+import sys
 from pathlib import Path
 from typing import Union
 
@@ -39,7 +40,27 @@ _logger = logging.getLogger(__name__)
 
 def save(args):
     ds = dicom_saver.DicomSaver(output_dir=args.output_dir)
-    ds.save(args.image_path, args.dicom_path)
+    nrrd_folder = args.nrrd_folder.resolve()
+
+    for patient in nrrd_folder.iterdir():
+        _logger.info(f"Reading nrrd folder: {patient}")
+
+        for scan in patient.iterdir():
+            if scan.is_dir():
+                mapping_json = scan / "mapping.json"
+                ct_path = scan / "CBCT.nrrd"
+
+                if mapping_json.is_file():
+                    with open(mapping_json, "r") as fp:
+                        mapping = json.load(str(mapping_json))
+                    dicom_file = mapping["Collections"]["files"][0]
+
+                else:
+                    _logger.error(f"Mapping json not found," \
+                        "using preset dicom parameters!")
+                    dicom_file = None
+
+                ds.save(ct_path, dicom_file)
 
 
 def parse_args(args):
@@ -52,18 +73,13 @@ def parse_args(args):
       :obj:`argparse.Namespace`: command line parameters namespace
     """
     parser = argparse.ArgumentParser(
-        description="Peform registration using SimpleElastix between two nrrd volumes")
+        description="Generate dicoms from nrrds")
     parser.add_argument("--version",
                         action="version",
                         version="clinical-evaluation {ver}".format(ver=__version__))
 
-    parser.add_argument(dest="image_path",
-                        help="Path to image that can be read by SimpleITK",
-                        type=Path)
-
-    parser.add_argument("--dicom_path",
-                        dest="dicom_path",
-                        help="Path to dicom file to carry over metadata from",
+    parser.add_argument(dest="nrrd_folder",
+                        help="Path to folder containing nrrds that need to be converted to dicoms",
                         type=Path)
 
     parser.add_argument(

@@ -1,13 +1,13 @@
 import logging
 import time
+import uuid
 from pathlib import Path
 from typing import Union
 
-import uuid
+import pydicom
 import SimpleITK as sitk
 from clinical_evaluation.dicom_saver import DICOM_KEY_TAG, DICOM_TAG_KEY
 from pydicom.uid import generate_uid
-import pydicom
 
 logger = logging.getLogger(__name__)
 # ORG ROOT generated from https://www.medicalconnections.co.uk/
@@ -35,14 +35,16 @@ def get_metadata_from_dicom(fn):
     reader.ReadImageInformation()
     logger.info(f"Reading {fn} for fetching existing metadata")
 
+
     for key in reader.GetMetaDataKeys():
-        metadata[key] = reader.GetMetaData(key)
+        if key in DICOM_TAG_KEY:
+            metadata[key] = reader.GetMetaData(key)
+            print()
+        else:
+            logger.warning(f"Skipping key: {key}")
 
     sequences = copy_sequences(fn)
 
-
-    readable_metadata = {DICOM_TAG_KEY[k]:v for k, v in metadata.items()}
-    logger.debug(f"Existing DICOM metadata: {readable_metadata}")
     return metadata
 
 
@@ -58,7 +60,7 @@ def load_dicom_metadata(path: Union[Path, str]):
         for fn in path.rglob('*.dcm'):
             return get_metadata_from_dicom(fn)
     else:
-        return get_metadata_from_dicom(fn)
+        return get_metadata_from_dicom(path)
 
 
 def compute_tags_from_image(image):
