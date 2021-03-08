@@ -69,3 +69,9 @@ def ssim(gt: np.ndarray, pred: np.ndarray, maxval: Optional[float] = None) -> np
         ssim = ssim + structural_similarity(gt[slice_num], pred[slice_num], data_range=maxval)
 
     return ssim / gt.shape[0]
+
+def relative_difference(gt: np.ndarray,  pred: np.ndarray, type='percent_error'):
+    #https://en.wikipedia.org/wiki/Relative_change_and_difference
+    # Since averaging is done, it gives percent error in terms of absolutes.
+    # No information about over/under estimation is provided.
+    return np.mean(np.abs(gt - pred)/ np.abs(gt))

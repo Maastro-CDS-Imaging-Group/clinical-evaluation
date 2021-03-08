@@ -2,7 +2,7 @@ from pathlib import Path
 
 import imageio
 import SimpleITK as sitk
-from clinical_evaluation.registration_tools import utils
+from clinical_evaluation.utils import ops
 
 
 class RegistrationVisualizer:
@@ -56,13 +56,13 @@ class RegistrationVisualizer:
         return sitk.Cast(overlay_image, sitk.sitkVectorUInt8)
 
     def create_2d_views(self, image):
-        image = utils.make_isotropic(image)
-        preview = utils.get_image_preview(image)
+        image = ops.make_isotropic(image)
+        preview = ops.get_image_preview(image)
         return preview
 
     def create_video(self, image):
-        image = utils.make_isotropic(image)
-        frames = utils.get_video_preview(image)
+        image = ops.make_isotropic(image)
+        frames = ops.get_video_preview(image)
         return frames
 
 

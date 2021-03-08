@@ -1,8 +1,10 @@
 from pathlib import Path
+
+import pandas as pd
+import SimpleITK as sitk
 from clinical_evaluation.evaluation_tools import phantom_evaluator
 from clinical_evaluation.utils import file_utils
-import pandas as pd
-import itertools
+
 
 def main(args):
     phantoms_data_path = args.phantoms_data_path.resolve()
@@ -18,24 +20,33 @@ def main(args):
             "plate": 0
         }
 
+    phantom_values = {k:v + 1024 for k,v in phantom_values.items()}
+
 
     for phantom_folder in phantoms_data_path.iterdir():
         assert phantom_folder.stem in [folder.stem for folder in translated_data_path.iterdir()], \
             f"translated folder for {phantom_folder} not found"
         
         original_path = phantom_folder / "CT.nrrd"
-        translated_path = translated_data_path / phantom_folder.stem / "CT.nrrd"
+        original = sitk.ReadImage(str(original_path.resolve()))
 
-        insert_mask_paths = {}
+        translated_path = translated_data_path / phantom_folder.stem / "CT.nrrd"
+        translated = sitk.ReadImage(str(translated_path.resolve()))
+
+        # Shift by 1024 to get all positive values
+        original = original + 1024
+        translated = translated + 1024
+
+        insert_masks = {}
         for path in phantom_folder.glob("*.nrrd"):
             if path.stem != "CT":
-                insert_mask_paths[path.stem] = {
-                    "path": path,
+                insert_masks[path.stem] = {
+                    "image": sitk.ReadImage(str(path.resolve())),
                     "value": phantom_values[path.stem]
                 }
 
-        evaluate_phantom = phantom_evaluator.PhantomEvaluator(original_path, translated_path,\
-                                 inserts_dict=insert_mask_paths)
+        evaluate_phantom = phantom_evaluator.PhantomEvaluator(original, translated,\
+                                 inserts_dict=insert_masks)
 
         metric_dict = evaluate_phantom()
         df = pd.json_normalize(metric_dict)

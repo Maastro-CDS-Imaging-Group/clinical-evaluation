@@ -4,7 +4,8 @@ from pathlib import Path
 from typing import Union
 
 import SimpleITK as sitk
-from clinical_evaluation.utils import (preprocess, registration_methods, ops)
+from clinical_evaluation.utils import (preprocess, ops)
+from clinical_evaluation.registration_tools import registration_methods
 
 _logger = logging.getLogger(__name__)
 
@@ -15,7 +16,6 @@ REGISTRATION_MAP = {
 
 
 class EvaluationPipeline:
-
     def load(self, path: Union[Path, str]):
         _logger.info(f"Loading image from {path}")
         try:
