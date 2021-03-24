@@ -4,29 +4,33 @@ from typing import Optional
 
 from skimage.metrics import peak_signal_noise_ratio, structural_similarity
 
+
 METRIC_DICT = {
-    "ssim": lambda x, y, mask: ssim(*sitk2npy(x, y, mask)),
-    "mse": lambda x, y, mask: mse(*sitk2npy(x, y, mask)),
-    "nmse": lambda x, y, mask: nmse(*sitk2npy(x, y, mask)),
-    "psnr": lambda x, y, mask: psnr(*sitk2npy(x, y, mask)),
-    "mae": lambda x, y, mask: mae(*sitk2npy(x, y, mask))
+    "ssim": lambda x, y, mask: ssim(*apply_mask(x, y, mask)),
+    "mse": lambda x, y, mask: mse(*apply_mask(x, y, mask)),
+    "nmse": lambda x, y, mask: nmse(*apply_mask(x, y, mask)),
+    "psnr": lambda x, y, mask: psnr(*apply_mask(x, y, mask)),
+    "mae": lambda x, y, mask: mae(*apply_mask(x, y, mask))
 }
 
 
-def calculate_metrics(target, deformed_image, mask=None, offset=None):
-    if offset is not None:
-        target, deformed_image = target + offset, deformed_image + offset
+def calculate_metrics(target, pred, mask=None, limit=(-1000, 2000)):
+    target = sitk.GetArrayFromImage(target)
+    pred = sitk.GetArrayFromImage(pred)
+
+    target = np.clip(target, *limit)
+    pred = np.clip(pred, *limit)
+
+    target, pred = target - limit[0], pred - limit[0]
 
     metrics = {}
     for label, metric_function in METRIC_DICT.items():
-        metrics[label] = metric_function(deformed_image, target, mask)
+        metrics[label] = metric_function(target, pred, mask)
 
     return metrics
 
 
-def sitk2npy(gt: sitk.Image, pred: sitk.Image, mask=None):
-    gt = sitk.GetArrayFromImage(gt)
-    pred = sitk.GetArrayFromImage(pred)
+def apply_mask(gt, pred, mask=None):
 
     if mask is not None:
         mask = sitk.GetArrayFromImage(mask).astype(np.bool)
@@ -40,7 +44,7 @@ def sitk2npy(gt: sitk.Image, pred: sitk.Image, mask=None):
 # Metrics below are taken from
 # https://github.com/facebookresearch/fastMRI/blob/master/fastmri/evaluate.py
 # Copyright (c) Facebook, Inc. and its affiliates.
-# Added MAE to the list of metrics
+# Added MAE to the list of metrics, change SSIM to 3D implementation
 
 def mae(gt: np.ndarray, pred: np.ndarray) -> np.ndarray:
     """Compute Mean Absolute Error (MAE)"""
@@ -62,13 +66,9 @@ def psnr(gt: np.ndarray, pred: np.ndarray) -> np.ndarray:
 
 def ssim(gt: np.ndarray, pred: np.ndarray, maxval: Optional[float] = None) -> np.ndarray:
     """Compute Structural Similarity Index Metric (SSIM)"""
+    
     maxval = gt.max() if maxval is None else maxval
-
-    ssim = 0
-    for slice_num in range(gt.shape[0]):
-        ssim = ssim + structural_similarity(gt[slice_num], pred[slice_num], data_range=maxval)
-
-    return ssim / gt.shape[0]
+    return structural_similarity(gt, pred, data_range=maxval)
 
 def relative_difference(gt: np.ndarray,  pred: np.ndarray, type='percent_error'):
     #https://en.wikipedia.org/wiki/Relative_change_and_difference

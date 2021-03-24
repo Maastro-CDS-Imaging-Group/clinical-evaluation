@@ -47,9 +47,9 @@ class RegistrationVisualizer:
                 frames = self.create_video(visual)
                 imageio.mimwrite(path, frames)
 
-    def get_checkerboard_image(self, image1, image2, checker_pattern=(4, 4, 4)):
+    def get_checkerboard_image(self, image1, image2):
         filter = sitk.CheckerBoardImageFilter()
-        return filter.Execute(image1, image2, checker_pattern)
+        return filter.Execute(image1, image2)
 
     def get_overlay_differences(self, image1, image2):
         overlay_image = sitk.Compose(image1, image2, image1)

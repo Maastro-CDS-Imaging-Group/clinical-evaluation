@@ -64,11 +64,11 @@ class PhantomEvaluator:
                 print(f"{label}, Original: {original_value}, Translated: {translated_value}")
 
                 self.metric_dict[label] = {
-                    'original': insert_dict['value'] - original_value,
-                    'translated': insert_dict['value'] - translated_value,
-                    'original_relative_difference': (original_value - insert_dict['value']) / insert_dict['value'] * 100,
-                    'translated_relative_difference': (translated_value - insert_dict['value']) / insert_dict['value'] * 100
-
+                    'ideal': insert_dict['value'],
+                    'CBCT': original_value,
+                    'sCT': translated_value,
+                    'CBCT_relative_difference': ((original_value - insert_dict['value']) / insert_dict['value']) * 100,
+                    'sCT_relative_difference': ((translated_value - insert_dict['value']) / insert_dict['value']) * 100
                 }
 
 
