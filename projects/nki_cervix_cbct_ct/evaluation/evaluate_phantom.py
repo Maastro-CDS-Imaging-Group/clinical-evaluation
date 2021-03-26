@@ -9,6 +9,8 @@ from clinical_evaluation.utils import file_utils
 def main(args):
     phantoms_data_path = args.phantoms_data_path.resolve()
     translated_data_path = args.translated_data_path.resolve()
+    output_dir = args.output_dir.resolve()
+    output_dir.mkdir(exist_ok=True, parents=True)
 
     phantom_values = {
             "Air": -1000,
@@ -50,12 +52,10 @@ def main(args):
 
         metric_dict = evaluate_phantom()
         df = pd.json_normalize(metric_dict)
-        df = file_utils.convert_to_multilevel_df(df)
+        # df = file_utils.convert_to_multilevel_df(df)
         df = df.transpose()
-        df.to_csv(f'{phantom_folder.stem}_evaluation.csv')
-
-
-
+        path = (output_dir / phantom_folder.stem).with_suffix(".csv")
+        df.to_csv(path)
 
 
 if __name__ == "__main__":
@@ -65,6 +65,7 @@ if __name__ == "__main__":
 
     parser.add_argument("phantoms_data_path", help="Path to original dataset", type=Path)
     parser.add_argument("translated_data_path", help="Path to translated dataset", type=Path)
+    parser.add_argument("--output_dir", help="Path where processing output will be stored", default="out", type=Path)
 
     args = parser.parse_args()
 

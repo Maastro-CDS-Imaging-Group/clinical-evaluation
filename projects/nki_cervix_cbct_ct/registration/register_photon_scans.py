@@ -60,6 +60,8 @@ def main(args):
         # Correct the CBCT value as its not calibrated,
         # clip the values and generate CBCT mask
         CBCT = preprocess.hu_correction(CBCT, cval=-1024)
+        CBCT = ops.truncate_CBCT_based_on_fov(CBCT)
+
         CBCT = preprocess.clip_values(CBCT)
 
         # Get body mask for the CBCT
@@ -110,10 +112,10 @@ def main(args):
 
         if args.analyze:
             # Calculate metrics between CBCT (target) and dpCT (deformed)
-            metric_dict = metrics.calculate_metrics(CBCT, dpCT, offset=-1000)
+            metric_dict = metrics.calculate_metrics(CBCT, dpCT)
 
             for label, mask in rt_masks.items():
-                mask_metrics = metrics.calculate_metrics(CBCT, dpCT, mask=mask, offset=-1000)
+                mask_metrics = metrics.calculate_metrics(CBCT, dpCT, mask=mask)
                 metric_dict.update({f"{k}_{label}": v for k,v in mask_metrics.items()})
 
             metric_dict["save_dir"] = str(out_dir)

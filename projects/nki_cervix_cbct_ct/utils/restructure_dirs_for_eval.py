@@ -4,7 +4,7 @@ import shutil
 def main(args):
     registered_path = args.registered_path.resolve()
     translated_path = args.translated_path.resolve()
-    
+
     if args.output_dir.exists():
         shutil.rmtree(args.output_dir)
 
