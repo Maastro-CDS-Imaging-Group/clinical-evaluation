@@ -64,11 +64,24 @@ def psnr(gt: np.ndarray, pred: np.ndarray) -> np.ndarray:
     return peak_signal_noise_ratio(gt, pred, data_range=gt.max())
 
 
-def ssim(gt: np.ndarray, pred: np.ndarray, maxval: Optional[float] = None) -> np.ndarray:
+def ssim(
+    gt: np.ndarray, pred: np.ndarray, maxval: Optional[float] = None
+) -> np.ndarray:
     """Compute Structural Similarity Index Metric (SSIM)"""
-    
+    if not gt.ndim == 3:
+        raise ValueError("Unexpected number of dimensions in ground truth.")
+    if not gt.ndim == pred.ndim:
+        raise ValueError("Ground truth dimensions does not match pred.")
+
     maxval = gt.max() if maxval is None else maxval
-    return structural_similarity(gt, pred, data_range=maxval)
+
+    ssim = 0
+    for slice_num in range(gt.shape[0]):
+        ssim = ssim + structural_similarity(
+            gt[slice_num], pred[slice_num], data_range=maxval
+        )
+
+    return ssim / gt.shape[0]
 
 def relative_difference(gt: np.ndarray,  pred: np.ndarray, type='percent_error'):
     #https://en.wikipedia.org/wiki/Relative_change_and_difference
