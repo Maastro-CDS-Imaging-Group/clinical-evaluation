@@ -6,13 +6,12 @@ from clinical_evaluation.utils import ops
 
 
 class RegistrationVisualizer:
-
     def __init__(self, outdir='out', save_mode='image'):
         self.save_mode = save_mode
         self.outdir = Path(outdir).resolve()
         self.outdir.mkdir(parents=True, exist_ok=True)
 
-    def save_registration_visualizations(self, image1, image2, min_HU=-1024, max_HU=2048):
+    def save_registration_visualizations(self, image1, image2, prefix=None, min_HU=-1024, max_HU=2048):
         image1 = sitk.Cast(
             sitk.IntensityWindowing(image1,
                                     windowMinimum=min_HU,
@@ -34,8 +33,11 @@ class RegistrationVisualizer:
             "image2": image2,
         }
 
+        if prefix is None:
+            prefix = self.outdir.stem
+
         for key, visual in visualizations.items():
-            path = (self.outdir / f"{self.outdir.stem}_{key}")
+            path = (self.outdir / f"{prefix}_{key}")
 
             if self.save_mode in ["image", "image+video"]:
                 path = path.with_suffix(".png")
@@ -46,6 +48,12 @@ class RegistrationVisualizer:
                 path = path.with_suffix(".mp4")
                 frames = self.create_video(visual)
                 imageio.mimwrite(path, frames)
+
+            if self.save_mode == "axial":
+                path = path.with_suffix(".png")
+                array = sitk.GetArrayFromImage(visual)
+                middle_axial = array[array.shape[0] // 2]
+                imageio.imwrite(path, middle_axial)
 
     def get_checkerboard_image(self, image1, image2):
         filter = sitk.CheckerBoardImageFilter()
