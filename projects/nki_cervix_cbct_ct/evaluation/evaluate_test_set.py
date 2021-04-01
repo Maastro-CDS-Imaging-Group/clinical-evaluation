@@ -27,7 +27,6 @@ def main(args):
     reginfo_data = RegistrationInformation(outdir=output_dir)
 
     patient_list = [(folder, {
-        'reginfo': reginfo_data,
         'output_dir': output_dir,
         'data_folder': data_folder
     }) for folder in data_folder.iterdir()]
@@ -35,11 +34,17 @@ def main(args):
     if args.cores > 1:
         logger.info(f"Running in multiprocessing mode with cores: {args.cores}")
         with multiprocessing.Pool(processes=args.cores) as pool:
-            pool.starmap(process_patient_folder, patient_list)
+            metrics_dict = pool.starmap(process_patient_folder, patient_list)
+            for metric_dict in metrics_dict:
+                reginfo_data.add_info(metric_dict)
+                reginfo_data.save_info()
+
     else:
         logger.info(f"Running in main process only")
         for folder, meta_dict in patient_list:
-            process_patient_folder(folder, meta_dict)
+            metric_dict = process_patient_folder(folder, meta_dict)
+            reginfo_data.add_info(metric_dict)
+            reginfo_data.save_info()
 
     mean_df = reginfo_data.get_aggregate_dataframe()
     mean_df = mean_df.transpose()
@@ -89,9 +94,6 @@ def process_patient_folder(folder, meta_dict):
 
     metric_dict["save_dir"] = str(meta_dict['data_folder'])
     metric_dict["Patient"] = folder.stem
-    reginfo_data = meta_dict['reginfo']
-    reginfo_data.add_info(metric_dict)
-    reginfo_data.save_info()
 
     visualizer = regviz.RegistrationVisualizer(outdir=outdir, save_mode='axial')
     visualizer.save_registration_visualizations(CBCT, CT, prefix='CBCT-CT')
@@ -106,6 +108,8 @@ def process_patient_folder(folder, meta_dict):
                                                 prefix='sCT-CT_Windowed',
                                                 min_HU=-150,
                                                 max_HU=250)
+
+    return metric_dict
 
 
 if __name__ == "__main__":
