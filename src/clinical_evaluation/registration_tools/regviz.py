@@ -55,6 +55,16 @@ class RegistrationVisualizer:
                 middle_axial = array[array.shape[0] // 2]
                 imageio.imwrite(path, middle_axial)
 
+            if self.save_mode == "axial_intervals":
+                n_intervals = 6
+                array = sitk.GetArrayFromImage(visual)
+                axial_intervals = [int(array.shape[0] * (idx/n_intervals)) for idx in range(n_intervals)]
+
+                for idx, interval in enumerate(axial_intervals):
+                    axial = array[interval]
+                    slice_path = f"{path}_slice_{idx}.png"
+                    imageio.imwrite(slice_path, axial)            
+
     def get_checkerboard_image(self, image1, image2):
         filter = sitk.CheckerBoardImageFilter()
         return filter.Execute(image1, image2)

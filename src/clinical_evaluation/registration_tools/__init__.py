@@ -3,8 +3,9 @@ import pandas as pd
 
 class RegistrationInformation:
 
-    def __init__(self, outdir='out'):
+    def __init__(self, outdir='out', save_to='registration_info.csv'):
         self.outdir = outdir
+        self.save_to = save_to
         self.df = pd.DataFrame()
 
     def add_info(self, info_dict):
@@ -13,7 +14,7 @@ class RegistrationInformation:
 
     def save_info(self):
         if not self.df.empty:
-            csv_path = (self.outdir / "registration_info").with_suffix(".csv")
+            csv_path = self.outdir / self.save_to
             self.df.to_csv(csv_path)
             
     def get_aggregate_dataframe(self):
