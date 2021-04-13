@@ -24,10 +24,9 @@ logger = logging.getLogger(__name__)
 def main(args):
     data_folder = args.dataset_path.resolve()
     output_dir = args.output_dir.resolve()
-    reginfo_data = RegistrationInformation(outdir=output_dir)
+    reginfo_data = RegistrationInformation(outdir=output_dir, save_to='patient_metrics.csv')
 
     patient_list = [(folder, {
-        'reginfo': reginfo_data,
         'output_dir': output_dir,
         'data_folder': data_folder
     }) for folder in data_folder.iterdir()]
@@ -35,11 +34,16 @@ def main(args):
     if args.cores > 1:
         logger.info(f"Running in multiprocessing mode with cores: {args.cores}")
         with multiprocessing.Pool(processes=args.cores) as pool:
-            pool.starmap(process_patient_folder, patient_list)
+            metrics = pool.starmap(process_patient_folder, patient_list)
+            for metric in metrics:
+                reginfo_data.add_info(metric)
+            reginfo_data.save_info()
     else:
         logger.info(f"Running in main process only")
         for folder, meta_dict in patient_list:
-            process_patient_folder(folder, meta_dict)
+            metric = process_patient_folder(folder, meta_dict)
+            reginfo_data.add_info(metric)
+        reginfo_data.save_info()
 
     mean_df = reginfo_data.get_aggregate_dataframe()
     mean_df = mean_df.transpose()
@@ -89,24 +93,24 @@ def process_patient_folder(folder, meta_dict):
 
     metric_dict["save_dir"] = str(meta_dict['data_folder'])
     metric_dict["Patient"] = folder.stem
-    reginfo_data = meta_dict['reginfo']
-    reginfo_data.add_info(metric_dict)
-    reginfo_data.save_info()
+    
 
-    visualizer = regviz.RegistrationVisualizer(outdir=outdir, save_mode='axial')
-    visualizer.save_registration_visualizations(CBCT, CT, prefix='CBCT-CT')
+    patient_id = folder.stem
+    visualizer = regviz.RegistrationVisualizer(outdir=outdir, save_mode='axial_intervals')
+    visualizer.save_registration_visualizations(CBCT, CT, prefix=f'{patient_id}_CBCT-CT')
     visualizer.save_registration_visualizations(CBCT,
                                                 CT,
-                                                prefix='CBCT-CT_Windowed',
+                                                prefix=f'{patient_id}_CBCT-CT_Windowed',
                                                 min_HU=-150,
                                                 max_HU=250)
-    visualizer.save_registration_visualizations(sCT, CT, prefix='sCT-CT')
+    visualizer.save_registration_visualizations(sCT, CT, prefix=f'{patient_id}_sCT-CT')
     visualizer.save_registration_visualizations(sCT,
                                                 CT,
-                                                prefix='sCT-CT_Windowed',
+                                                prefix=f'{patient_id}_sCT-CT_Windowed',
                                                 min_HU=-150,
                                                 max_HU=250)
 
+    return metric_dict
 
 if __name__ == "__main__":
     import argparse
