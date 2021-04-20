@@ -20,6 +20,8 @@ from clinical_evaluation.utils.logging import setup_logging
 
 logger = logging.getLogger(__name__)
 
+masks = (("PTV", ("PTV", "LP1_PTVtot", "PTVtot")), "BODY")
+
 
 def main(args):
     data_folder = args.dataset_path.resolve()
@@ -75,12 +77,22 @@ def process_patient_folder(folder, meta_dict):
     metric_dict.update({f"original_{k}": v for k, v in original_metrics.items()})
     metric_dict.update({f"translated_{k}": v for k, v in translated_metrics.items()})
 
-    if args.masks:
+    if masks:
         rt_masks = {}
-        for fn in folder.glob("*.nrrd"):
-            if fn.stem in args.masks:
-                mask_image = sitk.ReadImage(str(fn))
-                rt_masks[fn.stem] = mask_image
+        for mask in masks:
+            if isinstance(mask, tuple):
+                label = mask[0]
+                for mask_stem in mask[1]:
+                    mask_path = (folder / mask_stem).with_suffix('.nrrd')
+                    if mask_path.exists():
+                        break
+            else:
+                label = mask
+                mask_path = (folder / mask).with_suffix(".nrrd")
+
+            if mask_path.exists():
+                rt_masks[label] = sitk.ReadImage(str(mask_path))
+
 
         for label, mask in rt_masks.items():
             original_mask_metrics = metrics.calculate_metrics(CT, CBCT, mask=mask)
@@ -123,8 +135,6 @@ if __name__ == "__main__":
                         default="out",
                         type=Path)
     parser.add_argument("--cores", help="Number of cores for multiprocessing", default=1, type=int)
-
-    parser.add_argument("--masks", help="If comparisons should also be done for masks", nargs='+')
 
     parser.add_argument("-v",
                         "--verbose",
