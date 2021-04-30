@@ -28,10 +28,15 @@ def main(args):
     output_dir = args.output_dir.resolve()
     reginfo_data = RegistrationInformation(outdir=output_dir, save_to='patient_metrics.csv')
 
+    if args.filter_by:
+        patient_folders = [folder for folder in data_folder.iterdir() if folder.stem in args.filter_by]
+    else:
+        patient_folders = list(data_folder.iterdir())
+
     patient_list = [(folder, {
         'output_dir': output_dir,
         'data_folder': data_folder
-    }) for folder in data_folder.iterdir()]
+    }) for folder in patient_folders]
 
     if args.cores > 1:
         logger.info(f"Running in multiprocessing mode with cores: {args.cores}")
@@ -108,19 +113,21 @@ def process_patient_folder(folder, meta_dict):
     
 
     patient_id = folder.stem
-    visualizer = regviz.RegistrationVisualizer(outdir=outdir, save_mode='axial_intervals')
-    visualizer.save_registration_visualizations(CBCT, CT, prefix=f'{patient_id}_CBCT-CT')
+    folder_prefix = meta_dict['data_folder'].stem
+
+    visualizer = regviz.RegistrationVisualizer(outdir=outdir, save_mode='all_intervals')
+    # visualizer.save_registration_visualizations(CBCT, CT, prefix=f'{patient_id}_CBCT-CT')
     visualizer.save_registration_visualizations(CBCT,
                                                 CT,
-                                                prefix=f'{patient_id}_CBCT-CT_Windowed',
-                                                min_HU=-150,
-                                                max_HU=250)
-    visualizer.save_registration_visualizations(sCT, CT, prefix=f'{patient_id}_sCT-CT')
+                                                prefix=f'{patient_id}_CBCT-CT_Windowed_{folder_prefix}',
+                                                min_HU=-135,
+                                                max_HU=215)
+    # visualizer.save_registration_visualizations(sCT, CT, prefix=f'{patient_id}_sCT-CT')
     visualizer.save_registration_visualizations(sCT,
                                                 CT,
-                                                prefix=f'{patient_id}_sCT-CT_Windowed',
-                                                min_HU=-150,
-                                                max_HU=250)
+                                                prefix=f'{patient_id}_sCT-CT_Windowed_{folder_prefix}',
+                                                min_HU=-135,
+                                                max_HU=215)
 
     return metric_dict
 
@@ -134,6 +141,11 @@ if __name__ == "__main__":
                         help="Path where processing output will be stored",
                         default="out",
                         type=Path)
+
+    parser.add_argument("--filter_by",
+                        help="Enter list of patients to filter by",
+                        nargs='+')
+
     parser.add_argument("--cores", help="Number of cores for multiprocessing", default=1, type=int)
 
     parser.add_argument("-v",
