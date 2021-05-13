@@ -11,9 +11,9 @@ from pathlib import Path
 import multiprocessing
 
 import SimpleITK as sitk
-from clinical_evaluation.registration_tools import (pipeline, regviz)
-from clinical_evaluation.utils import (metrics, preprocess, ops)
-from clinical_evaluation.registration_tools import RegistrationInformation
+from clinical_evaluation.utils import visualizer
+from clinical_evaluation.evaluation import metrics
+from clinical_evaluation.registration import CSVSaver
 
 from tqdm import tqdm
 from clinical_evaluation.utils.logging import setup_logging
@@ -26,7 +26,7 @@ masks = (("PTV", ("PTV", "LP1_PTVtot", "PTVtot")), "BODY")
 def main(args):
     data_folder = args.dataset_path.resolve()
     output_dir = args.output_dir.resolve()
-    reginfo_data = RegistrationInformation(outdir=output_dir, save_to='patient_metrics.csv')
+    reginfo_data = CSVSaver(outdir=output_dir, save_to='patient_metrics.csv')
 
     if args.filter_by:
         patient_folders = [folder for folder in data_folder.iterdir() if folder.stem in args.filter_by]
@@ -74,60 +74,62 @@ def process_patient_folder(folder, meta_dict):
     CBCT = sitk.ReadImage(str(original))
     sCT = sitk.ReadImage(str(translated))
 
-    metric_dict = {}
 
-    original_metrics = metrics.calculate_metrics(CT, CBCT)
-    translated_metrics = metrics.calculate_metrics(CT, sCT)
+    if args.compute_metrics:
+        metric_dict = {}
 
-    metric_dict.update({f"original_{k}": v for k, v in original_metrics.items()})
-    metric_dict.update({f"translated_{k}": v for k, v in translated_metrics.items()})
+        original_metrics = metrics.calculate_metrics(CT, CBCT)
+        translated_metrics = metrics.calculate_metrics(CT, sCT)
 
-    if masks:
-        rt_masks = {}
-        for mask in masks:
-            if isinstance(mask, tuple):
-                label = mask[0]
-                for mask_stem in mask[1]:
-                    mask_path = (folder / mask_stem).with_suffix('.nrrd')
-                    if mask_path.exists():
-                        break
-            else:
-                label = mask
-                mask_path = (folder / mask).with_suffix(".nrrd")
+        metric_dict.update({f"original_{k}": v for k, v in original_metrics.items()})
+        metric_dict.update({f"translated_{k}": v for k, v in translated_metrics.items()})
 
-            if mask_path.exists():
-                rt_masks[label] = sitk.ReadImage(str(mask_path))
+        if masks:
+            rt_masks = {}
+            for mask in masks:
+                if isinstance(mask, tuple):
+                    label = mask[0]
+                    for mask_stem in mask[1]:
+                        mask_path = (folder / mask_stem).with_suffix('.nrrd')
+                        if mask_path.exists():
+                            break
+                else:
+                    label = mask
+                    mask_path = (folder / mask).with_suffix(".nrrd")
+
+                if mask_path.exists():
+                    rt_masks[label] = sitk.ReadImage(str(mask_path))
 
 
-        for label, mask in rt_masks.items():
-            original_mask_metrics = metrics.calculate_metrics(CT, CBCT, mask=mask)
-            metric_dict.update(
-                {f"original_{k}_{label}": v for k, v in original_mask_metrics.items()})
+            for label, mask in rt_masks.items():
+                original_mask_metrics = metrics.calculate_metrics(CT, CBCT, mask=mask)
+                metric_dict.update(
+                    {f"original_{k}_{label}": v for k, v in original_mask_metrics.items()})
 
-            translated_mask_metrics = metrics.calculate_metrics(CT, sCT, mask=mask)
-            metric_dict.update(
-                {f"translated_{k}_{label}": v for k, v in translated_mask_metrics.items()})
+                translated_mask_metrics = metrics.calculate_metrics(CT, sCT, mask=mask)
+                metric_dict.update(
+                    {f"translated_{k}_{label}": v for k, v in translated_mask_metrics.items()})
 
-    metric_dict["save_dir"] = str(meta_dict['data_folder'])
-    metric_dict["Patient"] = folder.stem
+        metric_dict["save_dir"] = str(meta_dict['data_folder'])
+        metric_dict["Patient"] = folder.stem
     
 
     patient_id = folder.stem
     folder_prefix = meta_dict['data_folder'].stem
 
-    visualizer = regviz.RegistrationVisualizer(outdir=outdir, save_mode='all_intervals')
-    # visualizer.save_registration_visualizations(CBCT, CT, prefix=f'{patient_id}_CBCT-CT')
-    visualizer.save_registration_visualizations(CBCT,
-                                                CT,
-                                                prefix=f'{patient_id}_CBCT-CT_Windowed_{folder_prefix}',
-                                                min_HU=-135,
-                                                max_HU=215)
-    # visualizer.save_registration_visualizations(sCT, CT, prefix=f'{patient_id}_sCT-CT')
-    visualizer.save_registration_visualizations(sCT,
-                                                CT,
-                                                prefix=f'{patient_id}_sCT-CT_Windowed_{folder_prefix}',
-                                                min_HU=-135,
-                                                max_HU=215)
+    viz = visualizer.Visualizer(outdir=outdir, save_mode='axial')
+    viz.save_visualizations(CBCT, prefix=f'{patient_id}_CBCT')
+    # viz.save_visualizations(CBCT,
+    #                                             CT,
+    #                                             prefix=f'{patient_id}_CBCT-CT_Windowed_{folder_prefix}',
+    #                                             min_HU=-135,
+    #                                             max_HU=215)
+    viz.save_visualizations(sCT, prefix=f'{patient_id}_sCT')
+    # viz.save_visualizations(sCT,
+    #                                             CT,
+    #                                             prefix=f'{patient_id}_sCT-CT_Windowed_{folder_prefix}',
+    #                                             min_HU=-135,
+    #                                             max_HU=215)
 
     return metric_dict
 
@@ -141,6 +143,11 @@ if __name__ == "__main__":
                         help="Path where processing output will be stored",
                         default="out",
                         type=Path)
+
+    parser.add_argument("--compute_metrics",
+                        help="Toggle computation of metrics during evaluation",
+                        default=True,
+                        type=bool)                        
 
     parser.add_argument("--filter_by",
                         help="Enter list of patients to filter by",

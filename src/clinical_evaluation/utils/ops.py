@@ -1,12 +1,18 @@
+import logging
+
+import matplotlib.pyplot as plt
 import numpy as np
 import SimpleITK as sitk
-import logging
+from clinical_evaluation.utils import ops
+
 logger = logging.getLogger(__name__)
 
+##### Visualization Operations ############################
 
-# Source: http://insightsoftwareconsortium.github.io/SimpleITK-Notebooks/Python_html/05_Results_Visualization.html
 def make_isotropic(image, interpolator=sitk.sitkLinear):
     '''
+    # Source: http://insightsoftwareconsortium.github.io/SimpleITK-Notebooks/Python_html/05_Results_Visualization.html
+
     Resample an image to isotropic pixels (using smallest spacing from original) and save to file. Many file formats 
     (jpg, png,...) expect the pixels to be isotropic. By default the function uses a linear interpolator. For
     label images one should use the sitkNearestNeighbor interpolator so as not to introduce non-existant labels.
@@ -82,41 +88,102 @@ def get_video_preview(sitk_image, orientation='vertical'):
     return frames
 
 
-def padded_stack(arrays, orientation='vertical'):
-    if orientation == 'vertical':
-        # 1st index is the width, if vertical stacking needs to
-        # be done, it will be stacked along the width
-        index = 1
-        stack_fn = np.vstack
+def clip_and_normalize_intensities(image, wmin=None, wmax=None, min=0, max=255, type=sitk.sitkUInt8):
+    """Clip values based on wmin and wmax and normalize them to range provided in min and max
+    Type casting can also be done by providing a type
 
-    elif orientation == 'horizontal':
-        # 0th index is the height, if horizontal stacking needs to
-        # be done, it will be stacked along the height
-        index = 0
-        stack_fn = np.hstack
-
-    dims = [arr.shape[index] for arr in arrays]
-
-    if not all_identical(dims):
-        arrays = [pad_to(arr, max(dims), index) for arr in arrays]
-
-    return stack_fn(arrays)
+    """
+    image = sitk.Cast(
+        sitk.IntensityWindowing(image,
+                                windowMinimum=wmin,
+                                windowMaximum=wmax,
+                                outputMinimum=min,
+                                outputMaximum=max), type)
+    return image
 
 
-def pad_to(arr, target, index):
-    ndim = len(arr.shape)
-    # Pad needs to be ndimx2 of the array
-    pad_tuple = np.zeros((ndim, 2), dtype=int)
-    pad_tuple[index][1] = target - arr.shape[index]
-    pad_tuple = [list(v) for v in pad_tuple]
+def get_residual_images(image1, image2):
+    """Subtract image1 from image2
+    """
+    return sitk.Subtract(image1, image2)
 
-    return np.pad(arr, pad_tuple)
+def get_checkerboard_image(image1, image2):
+    """Get a checkerboard image comparing image1 and image2 
+    http://insightsoftwareconsortium.github.io/SimpleITK-Notebooks/Python_html/05_Results_Visualization.html#Checkerboard
+    """
+    filter = sitk.CheckerBoardImageFilter()
+    return filter.Execute(image1, image2)
+
+def get_overlay_differences(image1, image2):
+    """Get the standard overlay image between image1 and image2. This is most 
+    commonly used to verify registrations
+    http://insightsoftwareconsortium.github.io/SimpleITK-Notebooks/Python_html/05_Results_Visualization.html#Combine-scalar-images-to-create-color-image
+    """
+    overlay_image = sitk.Compose(image1, image2, image1)
+    return sitk.Cast(overlay_image, sitk.sitkVectorUInt8)
+
+def create_2d_views(image):
+    """
+    Get an image with combined middle axial, sagittal and coronal views 
+    for a particular `image`
+    """
+    image = make_isotropic(image)
+    preview = get_image_preview(image)
+    return preview
+
+def create_video(image):
+    """
+    Get a video with all axial, sagittal and coronal views for a particular `image`
+    """
+    image = make_isotropic(image)
+    frames = get_video_preview(image)
+    return frames
+
+def get_visuals(ref, pred, min_HU=-135, max_HU=215):
+    """
+    Generates different visuals that are useful for visual inspection such as:
+    1. Difference axial image.
+    2. Zoomed central axial slice.
+    3. Sagittal views
+    """
+    visuals = {}
+    windowed_ref = np.clip(ref, min_HU, max_HU)
+    windowed_pred = np.clip(pred, min_HU, max_HU)
+    
+    difference_image = windowed_ref - windowed_pred
+    
+    difference_views = get_axial_sagittal_views(difference_image, min_HU, max_HU, normalize=False)
+    visuals.update({f'difference_{k}': v for k, v in difference_views.items()})
+        
+    pred_views = get_axial_sagittal_views(windowed_pred, min_HU, max_HU)
+    visuals.update(pred_views)
+    
+    return visuals
 
 
-def all_identical(sequence):
-    """Check if all values of a list or tuple are identical."""
-    return sequence.count(sequence[0]) == len(sequence)  # https://stackoverflow.com/a/3844948
+def get_axial_sagittal_views(image, min_HU, max_HU, zoom_factor=3, normalize=True):
+    """
+    Get axial and sagittal views along with zoomed axial and sagittal views. 
+    zoom_factor: Gives the amount of zoom that must be provided during center crop and zoom
+    """
+    views = {}
+    
+    if normalize:
+        image = image - min_HU / (max_HU - min_HU)
 
+    center = [dim//2 for dim in image.shape]
+    width = [dim//zoom_factor for dim in image.shape]
+    
+    crop_range = [[c - w//2, c + w//2] for c, w in zip(center, width)]
+    zoomed_patch = image[crop_range[0][0]:crop_range[0][1], crop_range[1][0]:crop_range[1][1], crop_range[2][0]:crop_range[2][1]]
+    views["zoomed_axial"] = zoomed_patch[zoomed_patch.shape[0]//2]
+    views["zoomed_sagittal"] = np.flipud(zoomed_patch[:, :, zoomed_patch.shape[2]//2])
+
+    views["axial"] = image[image.shape[0]//2]
+    views["sagittal"] = np.flipud(image[:, :, image.shape[2]//2])
+    return views
+
+##### Image Manipulation Operations ############################
 
 def apply_mask(image: sitk.Image, mask: sitk.Image):
     mask_filter = sitk.MaskImageFilter()
@@ -139,46 +206,152 @@ def slice_image(sitk_image: sitk.Image, start=(0, 0, 0), end=(-1, -1, -1)):
     return slice_filter.Execute(sitk_image)
 
 
+##### Plotting Utils #################################
 
-def truncate_CBCT_based_on_fov(image: sitk.Image):
-    """
-    Truncates the CBCT to consider full FOV in the scans. First few and last few slices
-    generally have small FOV that is around 25-50% of the axial slice. Ignore this 
-    using simple value based filtering. 
 
-    Parameters
-    ---------------
-    image: Input CBCT image to truncate. 
+def myshow(img, title=None, margin=0.05, dpi=80):
+    nda = sitk.GetArrayViewFromImage(img)
+    spacing = img.GetSpacing()
 
-    Returns
-    ----------------
-    filtered_image: Truncated CBCT image
-    """
-    array = sitk.GetArrayFromImage(image)
-    start_idx, end_idx = 0, array.shape[0]
+    if nda.ndim == 3:
+        # fastest dim, either component or x
+        c = nda.shape[-1]
 
-    begin_truncate = False
+        # the the number of components is 3 or 4 consider it an RGB image
+        if not c in (3, 4):
+            nda = nda[nda.shape[0] // 2, :, :]
 
-    for idx, slice in enumerate(array):
+    elif nda.ndim == 4:
+        c = nda.shape[-1]
 
-        # Calculate the percentage FOV.
-        # This should give an estimate of difference between
-        # area of the z-axis rectangular slice and circle formed by
-        # the FOV. Eg. 400x400 will have 160k area and if the FOV is
-        # an end to end circle then it will have an area of 3.14*200*200
-        percentage_fov = 1 - np.mean(slice == -1024)
-        # As soon as the percentage of fov in the image
-        # is above 75% of the image set the start index.
-        if percentage_fov > 0.75 and start_idx == 0:
-            start_idx = idx
-            begin_truncate = True
+        if not c in (3, 4):
+            raise Runtime("Unable to show 3D-vector Image")
 
-        # Once the start index is set and the fov percentage
-        # goes below 75% set the end index
-        if begin_truncate and percentage_fov < 0.75:
-            end_idx = idx - 1
-            break
+        # take a z-slice
+        nda = nda[nda.shape[0] // 2, :, :, :]
 
-    image = slice_image(image, start=(0, 0, start_idx), end=(-1, -1, end_idx))
+    ysize = nda.shape[0]
+    xsize = nda.shape[1]
 
-    return image
+    # Make a figure big enough to accommodate an axis of xpixels by ypixels
+    # as well as the ticklabels, etc...
+    figsize = (1 + margin) * ysize / dpi, (1 + margin) * xsize / dpi
+
+    fig = plt.figure(figsize=figsize, dpi=dpi)
+    # Make the axis the right size...
+    ax = fig.add_axes([margin, margin, 1 - 2 * margin, 1 - 2 * margin])
+
+    extent = (0, xsize * spacing[1], ysize * spacing[0], 0)
+
+    t = ax.imshow(nda, extent=extent, interpolation=None)
+
+    if nda.ndim == 2:
+        t.set_cmap("gray")
+
+    if (title):
+        plt.title(title)
+
+
+def myshow3d(img,
+             xslices=[],
+             yslices=[],
+             zslices=[],
+             title=None,
+             margin=0.05,
+             dpi=80):
+    size = img.GetSize()
+    img_xslices = [img[s, :, :] for s in xslices]
+    img_yslices = [img[:, s, :] for s in yslices]
+    img_zslices = [img[:, :, s] for s in zslices]
+
+    maxlen = max(len(img_xslices), len(img_yslices), len(img_zslices))
+
+    img_null = sitk.Image([0, 0], img.GetPixelID(),
+                          img.GetNumberOfComponentsPerPixel())
+
+    img_slices = []
+    d = 0
+
+    if len(img_xslices):
+        img_slices += img_xslices + [img_null] * (maxlen - len(img_xslices))
+        d += 1
+
+    if len(img_yslices):
+        img_slices += img_yslices + [img_null] * (maxlen - len(img_yslices))
+        d += 1
+
+    if len(img_zslices):
+        img_slices += img_zslices + [img_null] * (maxlen - len(img_zslices))
+        d += 1
+
+    if maxlen != 0:
+        if img.GetNumberOfComponentsPerPixel() == 1:
+            img = sitk.Tile(img_slices, [maxlen, d])
+        #TO DO check in code to get Tile Filter working with vector images
+        else:
+            img_comps = []
+            for i in range(0, img.GetNumberOfComponentsPerPixel()):
+                img_slices_c = [
+                    sitk.VectorIndexSelectionCast(s, i) for s in img_slices
+                ]
+                img_comps.append(sitk.Tile(img_slices_c, [maxlen, d]))
+            img = sitk.Compose(img_comps)
+
+    myshow(img, title, margin, dpi)
+
+
+def show_mid_slices(image, slices=3, show_axis=(True, True, True)):
+    image = ops.make_isotropic(image)
+    mid = [dim // 2 for dim in image.GetSize()]
+    slices += 1
+
+    slices_range = []
+
+    for idx, axis in enumerate(show_axis):
+        if axis:
+            slices_range.append([mid[idx], mid[idx] + slices])
+        else:
+            slices_range.append([])
+
+
+    myshow3d(image, xslices=slices_range[0], \
+                    yslices=slices_range[1],
+                    zslices=slices_range[2])
+
+
+##### Simplified Utilities ############################
+
+def all_identical(sequence):
+    """Check if all values of a list or tuple are identical."""
+    return sequence.count(sequence[0]) == len(sequence)  # https://stackoverflow.com/a/3844948
+
+
+def pad_to(arr, target, index):
+    ndim = len(arr.shape)
+    # Pad needs to be ndimx2 of the array
+    pad_tuple = np.zeros((ndim, 2), dtype=int)
+    pad_tuple[index][1] = target - arr.shape[index]
+    pad_tuple = [list(v) for v in pad_tuple]
+
+    return np.pad(arr, pad_tuple)
+
+
+def padded_stack(arrays, orientation='vertical'):
+    if orientation == 'vertical':
+        # 1st index is the width, if vertical stacking needs to
+        # be done, it will be stacked along the width
+        index = 1
+        stack_fn = np.vstack
+
+    elif orientation == 'horizontal':
+        # 0th index is the height, if horizontal stacking needs to
+        # be done, it will be stacked along the height
+        index = 0
+        stack_fn = np.hstack
+
+    dims = [arr.shape[index] for arr in arrays]
+
+    if not all_identical(dims):
+        arrays = [pad_to(arr, max(dims), index) for arr in arrays]
+
+    return stack_fn(arrays)    

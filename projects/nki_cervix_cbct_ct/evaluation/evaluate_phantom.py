@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 import SimpleITK as sitk
-from clinical_evaluation.evaluation_tools import phantom_evaluator
+from clinical_evaluation.evaluation import phantom_evaluator
 from clinical_evaluation.utils import file_utils
 
 

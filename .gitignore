@@ -51,3 +51,5 @@ MANIFEST
 *.dcm
 *.nrrd
 .history/
+*.mp4
+*.png

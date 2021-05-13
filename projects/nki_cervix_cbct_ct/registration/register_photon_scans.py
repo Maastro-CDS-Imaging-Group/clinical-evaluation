@@ -10,12 +10,10 @@ import logging
 from pathlib import Path
 
 import SimpleITK as sitk
-from clinical_evaluation.registration_tools import (pipeline, regviz)
-from clinical_evaluation.utils import (metrics, preprocess, ops)
-from clinical_evaluation.registration_tools import RegistrationInformation
-
+from clinical_evaluation.evaluation import metrics
+from clinical_evaluation.registration import CSVSaver, pipeline
+from clinical_evaluation.utils import ops, preprocess, visualizer
 from tqdm import tqdm
-from clinical_evaluation.utils.logging import setup_logging
 
 logger = logging.getLogger(__name__)
 
@@ -23,9 +21,9 @@ logger = logging.getLogger(__name__)
 def main(args):
     valid_folder = args.dataset_path.resolve()
     out_folder = args.output_dir.resolve()
-    reginfo_data = RegistrationInformation(outdir=out_folder)
+    reginfo_data = CSVSaver(outdir=out_folder)
 
-    eval_pipeline = pipeline.EvaluationPipeline()
+    reg_pipeline = pipeline.RegistrationPipeline()
 
     for folder in tqdm(list(valid_folder.iterdir())):
         
@@ -37,22 +35,22 @@ def main(args):
                 break
                 
         # Load CT, clip values and generate CT body mask
-        CT = eval_pipeline.load(CT_path)
+        CT = reg_pipeline.load(CT_path)
         CT = preprocess.clip_values(CT)
-        CT_mask = eval_pipeline.get_body_mask(CT)
+        CT_mask = reg_pipeline.get_body_mask(CT)
 
         # Loading RT masks that are present with planning CT
         mask_paths = {path.stem: path for path in CT_path.parent.glob("*.nrrd") \
                                                     if path.stem != "CT"}
         rt_masks = {}
         for label, path in mask_paths.items():
-            rt_masks[label] = eval_pipeline.load(path)
+            rt_masks[label] = reg_pipeline.load(path)
             rt_masks[label].CopyInformation(CT)
 
         # Loading CBCTs, select the first CBCT scan
         CBCT_path = (folder / "CBCT" / "X01").with_suffix(".nrrd")
         try:
-            CBCT = eval_pipeline.load(CBCT_path)
+            CBCT = reg_pipeline.load(CBCT_path)
         except RuntimeError:
             logger.error(f"Skipping: {folder.stem}")
             continue
@@ -60,12 +58,12 @@ def main(args):
         # Correct the CBCT value as its not calibrated,
         # clip the values and generate CBCT mask
         CBCT = preprocess.hu_correction(CBCT, cval=-1024)
-        CBCT = ops.truncate_CBCT_based_on_fov(CBCT)
+        CBCT = preprocess.truncate_CBCT_based_on_fov(CBCT)
 
         CBCT = preprocess.clip_values(CBCT)
 
         # Get body mask for the CBCT
-        CBCT_mask = eval_pipeline.get_body_mask(CBCT, HU_threshold=-700)
+        CBCT_mask = reg_pipeline.get_body_mask(CBCT, HU_threshold=-700)
 
         # Apply body masks to CBCT and CT
         CBCT = ops.apply_mask(CBCT, CBCT_mask)
@@ -75,14 +73,14 @@ def main(args):
         # https://elastix.lumc.nl/modelzoo/par0032/
 
         params = {
-        "config": ["/home/suraj/Repositories/clinical-evaluation/elastix_params/Par0032_rigid.txt", \
-                    "/home/suraj/Repositories/clinical-evaluation/elastix_params/Par0032_bsplines.txt"]
+        "config": ["./configs/Par0032_rigid.txt", \
+                    "./configs/Par0032_bsplines.txt"]
         }
 
         logger.info(f"Registering scans: {CBCT_path} and {CT_path}")
         
         # Deform the CT to CBCT and obtained the deformed planning CT or dpCT
-        dpCT, elastixfilter = eval_pipeline.deform(CT, CBCT, params, mode='Elastix')
+        dpCT, elastixfilter = reg_pipeline.deform(CT, CBCT, params, mode='Elastix')
 
         # Propagate CBCT mask to dpCT for better correspondence
         dpCT = ops.apply_mask(dpCT, CBCT_mask)
@@ -124,12 +122,14 @@ def main(args):
 
         if args.visualize:
             # Generate and save registration visualizations
-            visualizer = regviz.RegistrationVisualizer(outdir=out_dir, save_mode='image+video')
-            visualizer.save_registration_visualizations(CBCT, dpCT)
+            viz = visualizer.Visualizer(outdir=out_dir, save_mode='image+video')
+            viz.save_visualizations(CBCT, dpCT, checkerboard=True, overlay=True)
 
         reginfo_data.save_info()
         
 if __name__ == "__main__":
+    from clinical_evaluation.utils.logging import setup_logging
+
     import argparse
     parser = argparse.ArgumentParser(
         description="Registration + Visualization + Analysis for scans in a CBCT-CT dataset")

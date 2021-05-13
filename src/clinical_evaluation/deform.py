@@ -22,8 +22,8 @@ from pathlib import Path
 from typing import Union
 
 from clinical_evaluation import __version__
-from clinical_evaluation.registration_tools import metrics
-from clinical_evaluation.registration_tools.pipeline import EvaluationPipeline
+from clinical_evaluation.registration import metrics
+from clinical_evaluation.registration.pipeline import EvaluationPipeline
 
 __author__ = "Suraj Pai"
 __copyright__ = "Suraj Pai"

@@ -2,7 +2,7 @@ import logging
 from pathlib import Path
 
 import SimpleITK as sitk
-from clinical_evaluation.registration_tools import pipeline, regviz
+from clinical_evaluation.registration import pipeline, regviz
 from clinical_evaluation.utils import metrics, ops, preprocess
 from clinical_evaluation.utils.logging import setup_logging
 
