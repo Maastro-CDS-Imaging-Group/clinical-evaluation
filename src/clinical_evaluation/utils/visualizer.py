@@ -21,7 +21,7 @@ class Visualizer:
 
         if image2:
             image2 = ops.clip_and_normalize_intensities(image2, min_HU, max_HU)
-            visualizations["image2"] = image1
+            visualizations["image2"] = image2
 
             if checkerboard:
                 visualizations["checkerboard"] =  ops.get_checkerboard_image(image1, image2)

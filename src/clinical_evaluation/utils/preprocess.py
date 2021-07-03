@@ -1,11 +1,12 @@
-import SimpleITK as sitk
+import logging
+from typing import Union
 
-from scipy import ndimage
 import cv2
 import numpy as np
-
-import logging
+import SimpleITK as sitk
 from clinical_evaluation.utils import ops
+from scipy import ndimage
+
 logger = logging.getLogger(__name__)
 
 # https://github.com/SimpleITK/SlicerSimpleFilters/blob/master/SimpleFilters/SimpleFilters.py
@@ -115,7 +116,7 @@ def smooth_contour_points(contour: np.ndarray, radius: int = 3, sigma: int = 10)
     return np.array(smooth_contours)
 
 
-def get_body_mask(image: np.ndarray, HU_threshold: int) -> np.ndarray:
+def get_body_mask(image: Union[np.ndarray, sitk.Image], HU_threshold: int) -> np.ndarray:
     """
     Function that gets a mask around the patient body and returns a 3D bound
 
@@ -131,6 +132,9 @@ def get_body_mask(image: np.ndarray, HU_threshold: int) -> np.ndarray:
     bound: Bounds around the largest component in 3D. This is in
     the ((z_min, z_max), (y_min, y_max), (x_min, x_max)) format
     """
+
+    if type(image) == sitk.Image:
+        image = sitk.GetArrayFromImage(image)
 
     binarized_image = np.uint8(image >= HU_threshold)
 

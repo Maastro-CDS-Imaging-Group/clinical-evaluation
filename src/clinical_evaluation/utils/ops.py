@@ -169,7 +169,7 @@ def get_axial_sagittal_views(image, min_HU, max_HU, zoom_factor=3, normalize=Tru
     views = {}
     
     if normalize:
-        image = image - min_HU / (max_HU - min_HU)
+        image = (image - min_HU) / (max_HU - min_HU)
 
     center = [dim//2 for dim in image.shape]
     width = [dim//zoom_factor for dim in image.shape]
@@ -184,6 +184,14 @@ def get_axial_sagittal_views(image, min_HU, max_HU, zoom_factor=3, normalize=Tru
     return views
 
 ##### Image Manipulation Operations ############################
+
+def get_bounds_from_mask(mask_array: np.array):
+    z, y, x = np.nonzero(mask_array)
+    x_min, x_max = int(np.min(x)), int(np.max(x))
+    y_min, y_max = int(np.min(y)), int(np.max(y))
+    z_min, z_max = int(np.min(z)), int(np.max(z))
+    return ((x_min, y_min, z_min), (x_max, y_max, z_max))
+
 
 def apply_mask(image: sitk.Image, mask: sitk.Image):
     mask_filter = sitk.MaskImageFilter()

@@ -37,6 +37,14 @@ def main(args):
         # Generate a body mask 
         CT_mask = reg_pipeline.get_body_mask(CT)
 
+        # Loading RT masks that are present with planning CT
+        mask_paths = {path.stem: path for path in CT_path.parent.glob("*.nrrd") \
+                                                    if path.stem != "CT"}
+        rt_masks = {}
+        for label, path in mask_paths.items():
+            rt_masks[label] = reg_pipeline.load(path)
+            rt_masks[label].CopyInformation(CT)
+
         # Load CBCT, clip and generate body mask
         CBCT = reg_pipeline.load(CBCT_path)
         CBCT = preprocess.clip_values(CBCT)
@@ -66,6 +74,14 @@ def main(args):
         dpCT = ops.apply_mask(dpCT, CBCT_mask)
 
 
+        if args.propagate_contours:
+            logger.info("Propagating contours ...")
+            # Deform masks/ propagate contours based on the deformation fields.
+            rt_masks = {k: sitk.Cast(sitk.Transformix(mask, elastixfilter.GetTransformParameterMap()), sitk.sitkInt8)  \
+                                                                            for k, mask in rt_masks.items()}
+        else:
+            rt_masks = {}
+
         # Save all the required image
         out_dir = out_folder / patient.name
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -77,6 +93,10 @@ def main(args):
         sitk.WriteImage(CT, str(out_dir / f"source.nrrd"), True)
         sitk.WriteImage(dpCT, str(out_dir / f"deformed.nrrd"), True)
 
+     
+        # Save all the propagated contours
+        for label, mask in rt_masks.items():
+            sitk.WriteImage(mask, str(out_dir/ f"{label}.nrrd"), True)
         if args.analyze:
             # Calculate metrics between CBCT (target) and dpCT (deformed)
             metric_dict = metrics.calculate_metrics(CBCT, dpCT)
@@ -87,13 +107,15 @@ def main(args):
 
         if args.visualize:
             # Generate and save registration visualizations
-            viz = visualizer.Visualizer(outdir=out_dir, save_mode='image+video')
+            viz = visualizer.Visualizer(outdir=out_dir, save_mode='image')
             viz.save_visualizations(CBCT, dpCT, checkerboard=True, overlay=True)
 
         reginfo_data.save_info()
 
 
 if __name__ == "__main__":
+    from clinical_evaluation.utils.logging import setup_logging
+
     import argparse
     parser = argparse.ArgumentParser(
         description="Registration + Visualization + Analysis for scans in a CBCT-CT dataset")
@@ -112,7 +134,10 @@ if __name__ == "__main__":
     parser.add_argument("-a", "--analyze",
                         help="If registration process should be analyzed",
                         action='store_true', default=False)
-
+    
+    parser.add_argument("--propagate_contours",
+                        help="If contours should also be propagated from planning CT",
+                        action='store_true', default=False)
 
     parser.add_argument("-v",
                         "--verbose",
